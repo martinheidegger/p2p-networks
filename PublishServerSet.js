@@ -1,27 +1,31 @@
 'use strict'
 const { PublishServer, PublishServerState } = require('./PublishServer.js')
-const EventedSet = require('./EventedSet.js')
+const ConfigSet = require('./ConfigSet.js')
 const listenerChange = require('./lib/listenerChange.js')
+const EventEmitter = require('events').EventEmitter
 
-class ReplicationStateSet extends ReplicationState {
-  constructor (readKey, discoveryKey, createReplicationStream) {
-    super (readKey, discoveryKey, createReplicationStream)
-    this._states = new Map()
+class EventedSetOfSets extends EventEmitter {
+  constructor () {
+    super()
+    this._sets = new Set()
+  }
+  add (set) {
+    if (this._sets.has(set)) {
+      return
+    }
+    this._sets.add(set)
+    set.on('add', entry => this.emit('add', entry))
+    set.on('delete', entry => this.emit('delete', entry))
+    set.forEach(entry => this.emit('add', entry))
   }
 
-  stop () {
-    super.stop()
-    this._states.forEach(state => state.stop())
-  }
-
-  delete (server) {
-    const state = this._states.get(server)
-    this._states.delete(server)
-    return state
-  }
-
-  add (server, state) {
-    this._states.set(server, state)
+  delete (set) {
+    if (!this._sets.has(set)) {
+      return
+    }
+    this._sets.delete(set)
+    set.removeAllListeners()
+    set.forEach(entry => this.emit('delete', entry))
   }
 }
 
@@ -67,24 +71,19 @@ function reduceState (a, b) {
   return PublishServerState.EMPTY
 }
 
-class PublishServerSet extends EventedSet {
-  constructor () {
+class PublishServerSet extends ConfigSet {
+  constructor (keys) {
     super(opts => {
-      const publishServer = new PublishServer(opts)
+      const publishServer = new PublishServer(opts, keys)
       if (this.isGatheringTraffic) {
         publishServer.on('traffic', this.gatherTraffic)
       }
-      publishServer.on('listen', address => this.emit('listen', address))
-      publishServer.on('unlisten', address => this.emit('unlisten', address))
+      this._addresses.add(publishServer.addresses)
       publishServer.on('state', state => this._setState(publishServer, state))
       publishServer.on('connection', (address, connection) => this.emit('connection', address, connection))
       return {
-        replicate: publishServer.replicate,
         close: cb => {
-          this._replications.forEach(replicationState => {
-            const replication = replicationState.delete(publishServer)
-            return replication.stop()
-          })
+          this._addresses.delete(publishServer.addresses)
           publishServer.close(err => {
             if (err) return cb(err)
             this._setState(publishServer, null)
@@ -95,11 +94,8 @@ class PublishServerSet extends EventedSet {
       }
     })
 
-    this._state = PublishServerState.EMPTY
+    this._addresses = new EventedSetOfSets()
     this._states = new Map()
-    this._replications = new Set()
-    this.listen = this.listen.bind(this)
-    this.unlisten = this.unlisten.bind(this)
     this.gatherTraffic = this.gatherTraffic.bind(this)
 
     this.isGatheringTraffic = false
@@ -115,6 +111,14 @@ class PublishServerSet extends EventedSet {
     })
   }
 
+  get addresses () {
+    return this._addresses
+  }
+
+  close (cb) {
+
+  }
+
   _setState (server, serverState) {
     if (serverState === null) {
       this._states.delete(server)
@@ -126,24 +130,6 @@ class PublishServerSet extends EventedSet {
       this._state = state
       this.emit('state', state)
     }
-  }
-
-  replicate (readKey, discoveryKey, createReplicationStream) {
-    if (typeof discoveryKey === 'function') {
-      return this.listen(readKey, null, createReplicationStream)
-    }
-    if (!discoveryKey) {
-      // TODO: generate Key
-    }
-    const state = new ReplicationStateSet(readKey, discoveryKey, createReplicationStream)
-    state.once('stop', () => this._replications.delete(state))
-    this._replications.add(state)
-    this._instances.forEach(
-      publishServer => {
-        state.add(publishServer, publishServer.replicate(readKey, discoveryKey, createReplicationStream))
-      }
-    )
-    return state
   }
 }
 

@@ -1,6 +1,7 @@
 'use strict'
 const EventEmitter = require('events').EventEmitter
 const serviceLookup = require('./lib/serviceLookup.js')
+const EventedSet = require('./lib/EventedSet.js')
 
 const lookup = serviceLookup({
   tcp: () => require('./publish/tcp')
@@ -16,24 +17,26 @@ const PublishServerState = {
 
 class PublishServer extends EventEmitter {
   static verify (config) {
-    lookup(config)
-    return true
+    return lookup(config).verify(config)
   }
 
-  constructor (config) {
+  constructor (config, keys) {
     super()
     this._config = config
-    this._service = lookup(config)(this)
-    this.replicate = this.replicate.bind(this)
-    this.handshake = this.handshake.bind(this)
+    this._addresses = new EventedSet()
+    this._service = lookup(config).create(this, keys)
+  }
+
+  get addresses () {
+    return this._addresses
   }
 
   get config () {
     return this._config
   }
 
-  close (client) {
-    this._service.close(client)
+  close (cb) {
+    this._service.close(cb)
   }
 }
 

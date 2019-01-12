@@ -4,6 +4,8 @@ const createLockCb = require('flexlock-cb').createLockCb
 const DiscoverySet = require('./DiscoverySet.js')
 const PublishServerSet = require('./PublishServerSet.js')
 const connect = require('./connect.js')
+const EventedSet = require('./lib/EventedSet.js')
+const Evented2DMatrix = require('./lib/Evented2DMatrix.js')
 
 function assertIterable (property, ofObject) {
   const value = ofObject[property]
@@ -64,63 +66,25 @@ const DONE = {
   value: null
 }
 
-class Evented2DMatrix extends EventEmitter {
-  constructor (a, b) {
-    super()
-    a.on('add', aValue => {
-      for (const bValue of b) {
-        this.emit('add', aValue, bValue)
-      }
-    })
-    a.on('remove', aValue => {
-      for (const bValue of b) {
-        this.emit('remove', aValue, bValue)
-      }
-    })
-    b.on('add', bValue => {
-      for (const aValue of a) {
-        this.emit('add', aValue, bValue)
-      }
-    })
-    b.on('remove', bValue => {
-      for (const aValue of a) {
-        this.emit('remove', aValue, bValue)
-      }
-    })
-    this._a = a
-    this._b = b
+class ReplicationStateSet extends ReplicationState {
+  constructor (readKey, discoveryKey, createReplicationStream) {
+    super (readKey, discoveryKey, createReplicationStream)
+    this._states = new Map()
   }
 
-  entries () {
-    const aIter = this._a[Symbol.iterator]()
-    if (this._a.size === 0 || this._b.size === 0) {
-      return DONE
-    }
-    let aState = aIter.next()
-    let bIter = null
-    return {
-      next: function() {
-        if (aState.done) {
-          return DONE
-        }
-        if (bIter === null) {
-          bIter = this._b[Symbol.iterator]()
-        }
-        let bState = bIter.next()
-        if (bState.done) {
-          aState = aIter.next()
-          if (aState.done) {
-            return DONE
-          }
-          bIter = this._b[Symbol.iterator]()
-          bState = bIter.next()
-        }
-        return {
-          done: false,
-          value: [aState.value, bState.value]
-        }
-      }
-    }
+  stop () {
+    super.stop()
+    this._states.forEach(state => state.stop())
+  }
+
+  delete (server) {
+    const state = this._states.get(server)
+    this._states.delete(server)
+    return state
+  }
+
+  add (server, state) {
+    this._states.set(server, state)
   }
 }
 
@@ -133,18 +97,17 @@ class Network {
     }
     this._lock = createLockCb()
     this._replications = new MapOfSets()
-    this._publishServerSet = new PublishServerSet()
-    
-    this._discoverySet = new DiscoverySet(new AddressAndKeyCombination(
-      this._publishServerSet.addresses,
-      this._replications
+    this._keys = new EventedSet()
+    this._publishServerSet = new PublishServerSet(this._keys)
+    this._discoverySet = new DiscoverySet(new Evented2DMatrix(
+      this._keys,
+      this._publishServerSet.addresses
     ))
     this._publishServerSet.on('connection', (address, connection) => {
       // Now we need to 
     })
     this._discoverySet.on('peer', (key, peerAddress) => {
       connect(peerAddress, key, (err, connection) => {
-        
       })
     })
   }
@@ -152,10 +115,10 @@ class Network {
   replicate (readKey, discoveryKey, createReplicationStream) {
     const state = new ReplicationState(readKey, discoveryKey, createReplicationStream)
     state.once('stop', () => {
-      this._discoverySet.removeKey(discoveryKey)
+      this._keys.delete(discoveryKey)
       this._replications.remove(discoveryKey, state)
     })
-    this._discoverySet.addKey(discoveryKey)
+    this._keys.add(discoveryKey)
     this._replications.add(discoveryKey, state)
     return state
   }
