@@ -14,16 +14,17 @@ function configHash (config) {
   })
 }
 
-class EventedSet extends EventEmitter {
+class ConfigSet extends EventEmitter {
   constructor (createInstance) {
     super()
     this._createInstance = createInstance
     this._lock = createLockCb()
     this._instances = new Map()
-    this._paused = false
+    this._closed = false
   }
 
-  update (paused, iterable) {
+  update (iterable) {
+    if (this._closed) return
     let added = []
     let removed = new Set(this._instances.keys())
     const iter = iterable[Symbol.iterator]()
@@ -40,7 +41,11 @@ class EventedSet extends EventEmitter {
       }
     }
     this._lock(unlock => {
-      mapEach(removed, (hash, cb) => this._remove(hash, cb), 1, err => {
+      mapEach(removed, (hash, cb) => {
+        if (this._closed) return cb()
+        this._remove(hash, cb)
+      }, 1, err => {
+        if (this._closed) return unlock()
         if (err) {
           return unlock(err)
         }
@@ -48,9 +53,11 @@ class EventedSet extends EventEmitter {
       })
     }, 0, err => { /* TODO: HANDLE ERROR */ })
   }
+
   clear (cb) {
     return this._lock(unlock => {
       mapEach(this._instances.entries(), (tuple, cb) => {
+        if (this._closed) return cb()
         const hash = tuple[0]
         const instance = tuple[1]
         instance.close(err => {
@@ -83,7 +90,7 @@ class EventedSet extends EventEmitter {
 
   _remove (hash, cb) {
     return this._lock(unlock => {
-      if (!this._instances.has(hash)) {
+      if (this._closed || !this._instances.has(hash)) {
         return unlock(null, false)
       }
       const instance = this._instances.get(hash)
@@ -95,6 +102,13 @@ class EventedSet extends EventEmitter {
     }, cb)
   }
 
+  close (cb) {
+    this.clear(err => {
+      this._closed = true
+      cb(err)
+    })
+  }
+
   add (config, cb) {
     return this._add(config, configHash(config), cb)
   }
@@ -104,4 +118,4 @@ class EventedSet extends EventEmitter {
   }
 }
 
-module.exports = EventedSet
+module.exports = ConfigSet

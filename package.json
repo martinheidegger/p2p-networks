@@ -24,11 +24,18 @@
   },
   "dependencies": {
     "@hyperswarm/dht": "0.0.1",
+    "address": "^1.0.3",
     "deep-diff": "^1.0.2",
     "deep-equal": "^1.0.1",
+    "dht-rpc": "^4.1.1",
     "flexlock": "^1.2.1",
     "flexlock-cb": "^1.0.0",
+    "ip": "^1.1.5",
+    "ipmask": "^1.0.0",
+    "ipv4-peers": "^1.1.1",
     "map-each": "^1.0.0",
+    "multicast-dns": "^7.2.0",
+    "network-address": "^1.1.2",
     "object-hash": "^1.3.1",
     "run-each": "^1.0.0"
   }

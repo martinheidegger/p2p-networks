@@ -17,14 +17,15 @@ const PublishServerState = {
 
 class PublishServer extends EventEmitter {
   static verify (config) {
-    return lookup(config).verify(config)
+    return lookup(config).verify()
   }
 
   constructor (config, keys) {
     super()
     this._config = config
-    this._addresses = new EventedSet()
-    this._service = lookup(config).create(this, keys)
+    const addresses = new EventedSet()
+    this._addresses = addresses
+    this._service = lookup(config).create(this, keys, addresses)
   }
 
   get addresses () {

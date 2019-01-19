@@ -61,11 +61,6 @@ class MapOfSets extends Map {
   }
 }
 
-const DONE = {
-  done: true,
-  value: null
-}
-
 class ReplicationStateSet extends ReplicationState {
   constructor (readKey, discoveryKey, createReplicationStream) {
     super (readKey, discoveryKey, createReplicationStream)
@@ -99,16 +94,20 @@ class Network {
     this._replications = new MapOfSets()
     this._keys = new EventedSet()
     this._publishServerSet = new PublishServerSet(this._keys)
-    this._discoverySet = new DiscoverySet(new Evented2DMatrix(
+    const keyAddressSet = new Evented2DMatrix(
       this._keys,
       this._publishServerSet.addresses
-    ))
+    )
+    this._discoverySet = new DiscoverySet(keyAddressSet)
     this._publishServerSet.on('connection', (address, connection) => {
       // Now we need to 
     })
-    this._discoverySet.on('peer', (key, peerAddress) => {
+    this._discoverySet.peers.on('add', (key, peerAddress) => {
+      // TODO: now we need to see if we can connect to this peer.
+      /*
       connect(peerAddress, key, (err, connection) => {
       })
+      */
     })
   }
 

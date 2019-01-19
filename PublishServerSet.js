@@ -2,32 +2,7 @@
 const { PublishServer, PublishServerState } = require('./PublishServer.js')
 const ConfigSet = require('./ConfigSet.js')
 const listenerChange = require('./lib/listenerChange.js')
-const EventEmitter = require('events').EventEmitter
-
-class EventedSetOfSets extends EventEmitter {
-  constructor () {
-    super()
-    this._sets = new Set()
-  }
-  add (set) {
-    if (this._sets.has(set)) {
-      return
-    }
-    this._sets.add(set)
-    set.on('add', entry => this.emit('add', entry))
-    set.on('delete', entry => this.emit('delete', entry))
-    set.forEach(entry => this.emit('add', entry))
-  }
-
-  delete (set) {
-    if (!this._sets.has(set)) {
-      return
-    }
-    this._sets.delete(set)
-    set.removeAllListeners()
-    set.forEach(entry => this.emit('delete', entry))
-  }
-}
+const EventedSetOfSets = require('./lib/EventedSetOfSets.js')
 
 function reduce (iterable, operation, start) {
   const iter = iterable[Symbol.iterator]()
@@ -42,20 +17,6 @@ function reduce (iterable, operation, start) {
 const DONE = {
   value: null,
   done: true
-}
-
-function map (iterable, operation) {
-  const iter = iterable[Symbol.iterator]()
-  return {
-    next: function () {
-      const current = iter.next()
-      if (current.done) return DONE
-      return {
-        done: false,
-        value: operation(iter.value)
-      }
-    }
-  }
 }
 
 function reduceState (a, b) {
@@ -113,10 +74,6 @@ class PublishServerSet extends ConfigSet {
 
   get addresses () {
     return this._addresses
-  }
-
-  close (cb) {
-
   }
 
   _setState (server, serverState) {

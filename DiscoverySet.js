@@ -1,15 +1,17 @@
 'use strict'
 const Discovery = require('./Discovery.js')
 const ConfigSet = require('./ConfigSet.js')
+const EventedMergedMap = require('./lib/EventedMergedMap.js')
 
 class DiscoverySet extends ConfigSet {
 
-  constructor (keyAddressSet) {
+  constructor (keyByAddress) {
     super(config => {
-      const discovery = new Discovery(config, keyAddressSet)
-      discovery.on('peer', (key, peerAddress) => this.emit('peer', key, peerAddress))
+      const discovery = new Discovery(config, keyByAddress)
+      this._peers.add(discovery.peers)
       return {
-        close: function (cb) {
+        close: cb => {
+          this._peers.delete(discovery.peers)
           discovery.close((err) => {
             if (err) return cb(err)
             discovery.removeAllListeners()
@@ -18,6 +20,12 @@ class DiscoverySet extends ConfigSet {
         }
       }
     })
+
+    this._peers = new EventedMergedMap()
+  }
+
+  get peers () {
+    return this._peers
   }
 }
 

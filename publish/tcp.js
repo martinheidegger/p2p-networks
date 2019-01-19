@@ -2,15 +2,15 @@
 const net = require('net')
 
 module.exports = {
-  validate: () => true,
-  create: (opts, proxy) => {
+  validate: (config) => true,
+  create: (config, proxy, keys, addresses) => {
     // TODO: validate options & throw error if wrong!
     const server = net.createServer()
 
     let _state = 'connecting'
     const _listener = {}
     setImmediate(() => proxy.emit('state', _state))
-    server.listen(opts.port)
+    server.listen(config.port)
     server.on('connection', connection => {
       
     })
