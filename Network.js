@@ -28,11 +28,6 @@ class ReplicationState extends EventEmitter {
     this.createReplicateStream = createReplicateStream
   }
 
-  unlisten () {
-    this._servers.forEach(server => server.unlisten())
-    this._servers = new Set()
-  }
-
   stop () {
     this.emit('stop')
   }
@@ -84,7 +79,7 @@ class ReplicationStateSet extends ReplicationState {
 }
 
 class Network {
-  constructor () {
+  constructor (config) {
     this._config = {
       paused: false,
       discovery: [],
@@ -94,13 +89,14 @@ class Network {
     this._replications = new MapOfSets()
     this._keys = new EventedSet()
     this._publishServerSet = new PublishServerSet(this._keys)
-    const keyAddressSet = new Evented2DMatrix(
+    const keyByAddress = new Evented2DMatrix(
       this._keys,
       this._publishServerSet.addresses
     )
-    this._discoverySet = new DiscoverySet(keyAddressSet)
+    this._discoverySet = new DiscoverySet(keyByAddress)
     this._publishServerSet.on('connection', (address, connection) => {
-      // Now we need to 
+      // Now we need to make sure that the connection is connected
+      // to the correct replications
     })
     this._discoverySet.peers.on('add', (key, peerAddress) => {
       // TODO: now we need to see if we can connect to this peer.
@@ -109,6 +105,9 @@ class Network {
       })
       */
     })
+    if (config) {
+      this.update(config)
+    }
   }
 
   replicate (readKey, discoveryKey, createReplicationStream) {

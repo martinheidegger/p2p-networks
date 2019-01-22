@@ -14,15 +14,18 @@ module.exports = {
     server.on('connection', connection => {
       
     })
-    server.on('listening', () => setState('connected'))
+    server.on('listening', () => {
+      
+      setState('connected')
+    })
     server.on('error', error => {
       proxy.emit('log', { type: 'error', error: error })
       setState('broken')
-      if (opts.reconnect > 0) {
+      if (config.reconnect > 0) {
         setTimeout(() => {
           setState('connecting')
-          server.listen(opts.port)
-        }, opts.reconnect)
+          server.listen(config.port)
+        }, config.reconnect)
       }
     })
     return {
