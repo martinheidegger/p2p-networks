@@ -1,32 +1,41 @@
 'use strict'
 const test = require('tape')
-const dht = require('../../discovery/dht.js')
+const dht = require('../../discovery/dht-legacy.js')
 const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
 const EventEmitter = require('events').EventEmitter
+const Evented2DMatrix = require('../../lib/Evented2DMatrix.js')
+const EventedSet = require('../../lib/EventedSet.js')
 const crypto = require('crypto')
-const DHT = require('dht-rpc')
+const createDht = require('bittorrent-dht')
 const ipv4Peers = require('ipv4-peers')
 
 const noop = () => {}
 const bootstrap = []
-const node = DHT({
-  ephemeral: true
+const node = createDht({
+  bootstrap: false
 })
+let keys
+let keyByAddress
+let addresses
 test('before', t => {
+  keys = new EventedSet()
+  addresses = new EventedSet()
+  keyByAddress = new Evented2DMatrix(keys, addresses)
   node.listen(0, () => {
     const addr = node.address()
-    bootstrap.push(addr.address + ':' + addr.port)
+    bootstrap.push('127.0.0.1:' + addr.port)
     t.end()
   })
 })
 
-function create () {
+function create (name, opts) {
   const event = new EventEmitter()
   const peers = new EventedMapOfSets()
-  const service = dht.create({ bootstrap }, event, peers)
+  const service = dht.create(Object.assign({}, opts, { bootstrap, name }), event, peers, keyByAddress)
   return { service, event, peers }
 }
 
+/*
 test('starting and closing', t => {
   const { service, event } = create()
   const stack = []
@@ -40,18 +49,21 @@ test('starting and closing', t => {
     t.end()
   })
 })
+*/
 
 test('connecting to localhost', t => {
-  const a = create()
+  const a = create('a', { checkInterval: 5 })
   a.event.on('listening', function () {
     const topic = crypto.randomBytes(32).toString('hex')
-    a.service.announce(topic, {
-      port: '8080',
+    const server = {
+      port: 8080,
       localAddress: { port: '8080', host: '127.0.0.1' }
-    }, () => {
+    }
+    addresses.add(server)
+    a.service.announce(topic, server, function () {
       b.service.lookup(topic, noop)
     })
-    const b = create()
+    const b = create('b')
     b.event.on('warning', function (warn) {
       console.log(warn)
     })

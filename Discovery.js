@@ -2,8 +2,10 @@
 const EventEmitter = require('events').EventEmitter
 const serviceLookup = require('./lib/serviceLookup.js')
 const EventedMapOfSets = require('./lib/EventedMapOfSets.js')
+const rangeInterval = require('./lib/rangeInterval.js')
 
 const services = serviceLookup({
+  "dht-legacy": () => require('./discovery/dht-legacy'),
   dht: () => require('./discovery/dht'),
   dns: () => require('./discovery/dns')
 })
@@ -19,6 +21,12 @@ function stateMgr (onChange, state) {
       }
     }
   }
+}
+
+const LOOKUP = {
+  IDLE: Symbol('Idle.'),
+  ACTIVE: Symbol('Sending a lookup event following an interval'),
+  INACTIVE: Symbol('Waiting for keys to exist before activation')
 }
 
 class Discovery extends EventEmitter {
@@ -37,7 +45,7 @@ class Discovery extends EventEmitter {
     this._peers = new EventedMapOfSets()
     this.closed = new Promise(resolve => this.on('close', resolve))
 
-    const service = services(config).create(this, this._peers)
+    const service = services(config).create(this, this._peers, keyByAddress)
     const removeKeyAdress = (key, address) => {
       service.unannounce(key, address)
       if (keyByAddress.y.size === 0) {
@@ -51,6 +59,44 @@ class Discovery extends EventEmitter {
       state.set(Discovery.STATE_WAITING)
       setTimeout(() => service.open(), config.reconnect)
     }
+    const activateLookup = () => {
+      lookupState.set(LOOKUP.ACTIVE)
+    }
+    const testDeactivateLookup = () => {
+      if (keyByAddress.x.size > 0) return
+      lookupState.set(LOOKUP.INACTIVE)
+    }
+    const lookupRange = rangeInterval.parse(config.lookupInterval || '10~15min')
+    let lookupInterval
+    const lookupState = stateMgr((newState, oldState) => {
+      switch (oldState) {
+        case LOOKUP.ACTIVE:
+          rangeInterval.clear(lookupInterval)
+          keyByAddress.x.removeListener('add', service.lookup)
+          keyByAddress.x.removeListener('remove', testDeactivateLookup)
+          break
+        case LOOKUP.INACTIVE:
+          keyByAddress.x.removeListener('add', activateLookup)
+          break
+      }
+      switch (newState) {
+        case LOOKUP.ACTIVE:
+          keyByAddress.x.on('remove', testDeactivateLookup)
+          keyByAddress.x.on('add', service.lookup)
+          for (const key of keyByAddress.x) {
+            service.lookup(key)
+          }
+          lookupInterval = rangeInterval.set(() => {
+            for (const key of keyByAddress) {
+              service.lookup(key)
+            }
+          }, lookupRange)
+          break
+        case LOOKUP.INACTIVE:
+          keyByAddress.x.on('add', activateLookup)
+          break
+      }
+    }, LOOKUP.IDLE)
     const listening = () => state.set(keyByAddress.y.size === 0 ? Discovery.STATE_LOOKUP : Discovery.STATE_ANNOUNCE)
     const state = stateMgr((newState, oldState) => {
       switch (oldState) {
@@ -59,7 +105,7 @@ class Discovery extends EventEmitter {
           keyByAddress.removeListener('remove', removeKeyAdress)
           break
         case Discovery.STATE_LOOKUP:
-          keyByAddress.x.removeListener('add', service.lookup)
+          lookupState.set(LOOKUP.IDLE)
           keyByAddress.y.removeKeyAdress('add', setStateToAnnounce)
           break
       }
@@ -72,11 +118,8 @@ class Discovery extends EventEmitter {
           }
           break
         case Discovery.STATE_LOOKUP:
-          keyByAddress.x.addListener('add', service.lookup)
+          lookupState.set(keyByAddress.x.size > 0 ? LOOKUP.ACTIVE : LOOKUP.INACTIVE)
           keyByAddress.y.addListener('add', setStateToAnnounce)
-          for (const key of keyByAddress.x) {
-            service.lookup(key)
-          }
           break
         case Discovery.STATE_CLOSED:
           service.close()

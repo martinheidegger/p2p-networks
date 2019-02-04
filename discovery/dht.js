@@ -16,16 +16,17 @@ module.exports = {
     let rpc
     return {
       open,
-      lookup: function (key) {
+      lookup: function (key, cb) {
         handleStream(key, null, rpc.query('peers', Buffer.from(key, 'hex'), {}, err => {
           // TODO: What to do with an error?
+          cb()
         }))
       },
-      announce: function (key, address) {
-        queryAndUpdate(key, addressToPacket(address, ANNOUNCE_FLAG))
+      announce: function (key, address, cb) {
+        queryAndUpdate(key, addressToPacket(address, ANNOUNCE_FLAG), cb)
       },
-      unannounce: function (key, address) {
-        queryAndUpdate(key, addressToPacket(address, UNANNOUNCE_FLAG))
+      unannounce: function (key, address, cb) {
+        queryAndUpdate(key, addressToPacket(address, UNANNOUNCE_FLAG), cb)
       },
       close: function () {
         rpc.removeAllListeners()
@@ -57,10 +58,11 @@ module.exports = {
       })
     }
 
-    function queryAndUpdate (key, packet) {
+    function queryAndUpdate (key, packet, cb) {
       const host = hostForPackage(packet)
       handleStream(key, host, rpc.queryAndUpdate('peers', Buffer.from(key, 'hex'), packet, err => {
         // TODO: What to do with an error?
+        cb()
       }))
     }
 
