@@ -2,7 +2,7 @@
 const EventEmitter = require('events').EventEmitter
 const createLockCb = require('flexlock-cb').createLockCb
 const DiscoverySet = require('./DiscoverySet.js')
-const PublishServerSet = require('./PublishServerSet.js')
+const TransportSet = require('./TransportSet.js')
 const connect = require('./connect.js')
 const EventedSet = require('./lib/EventedSet.js')
 const Evented2DMatrix = require('./lib/Evented2DMatrix.js')
@@ -83,18 +83,18 @@ class Network {
     this._config = {
       paused: false,
       discovery: [],
-      publishServer: []
+      transport: []
     }
     this._lock = createLockCb()
     this._replications = new MapOfSets()
     this._keys = new EventedSet()
-    this._publishServerSet = new PublishServerSet(this._keys)
+    this._transportSet = new TransportSet(this._keys)
     const keyByAddress = new Evented2DMatrix(
       this._keys,
-      this._publishServerSet.addresses
+      this._transportSet.addresses
     )
     this._discoverySet = new DiscoverySet(keyByAddress)
-    this._publishServerSet.on('connection', (address, connection) => {
+    this._transportSet.on('connection', (address, connection) => {
       // Now we need to make sure that the connection is connected
       // to the correct replications
     })
@@ -141,7 +141,7 @@ class Network {
 
   update (config) {
     this._config.discovery = Array.from(assertIterable('discovery', config))
-    this._config.publishServer = Array.from(assertIterable('publishServer', config))
+    this._config.transport = Array.from(assertIterable('transport', config))
     if (!this.setPaused(config.paused)) {
       // We need an update, no matter if paused worked or not, but
       // if it works, it will trigger an update!
@@ -151,7 +151,7 @@ class Network {
 
   _triggerUpdate () {
     this._discoverySet.update(this._config.paused ? [] : this._config.discovery)
-    this._publishServerSet.update(this._config.paused ? [] : this._config.publishServer)
+    this._transportSet.update(this._config.paused ? [] : this._config.transport)
   }
 
   toJSON () {

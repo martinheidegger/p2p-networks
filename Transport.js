@@ -4,10 +4,10 @@ const serviceLookup = require('./lib/serviceLookup.js')
 const EventedSet = require('./lib/EventedSet.js')
 
 const lookup = serviceLookup({
-  tcp: () => require('./publish/tcp')
+  tcp: () => require('./transport/tcp')
 })
 
-const PublishServerState = {
+const TransportState = {
   CONNECTED: 'connected',
   CONNECTING: 'connecting',
   CLOSING: 'closing',
@@ -15,7 +15,7 @@ const PublishServerState = {
   BROKEN: 'broken'
 }
 
-class PublishServer extends EventEmitter {
+class Transport extends EventEmitter {
   static verify (config) {
     return lookup(config).verify()
   }
@@ -41,5 +41,5 @@ class PublishServer extends EventEmitter {
   }
 }
 
-exports.PublishServerState = PublishServerState
-exports.PublishServer = PublishServer
+exports.TransportState = TransportState
+exports.Transport = Transport

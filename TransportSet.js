@@ -1,5 +1,5 @@
 'use strict'
-const { PublishServer, PublishServerState } = require('./PublishServer.js')
+const { Transport, TransportState } = require('./Transport.js')
 const ConfigSet = require('./ConfigSet.js')
 const listenerChange = require('./lib/listenerChange.js')
 const EventedSetOfSets = require('./lib/EventedSetOfSets.js')
@@ -20,35 +20,35 @@ const DONE = {
 }
 
 function reduceState (a, b) {
-  if (a === PublishServerState.CONNECTED || b === PublishServerState.CONNECTED) {
-    return PublishServerState.CONNECTED
+  if (a === TransportState.CONNECTED || b === TransportState.CONNECTED) {
+    return TransportState.CONNECTED
   }
-  if (a === PublishServerState.CONNECTING || b === PublishServerState.CONNECTING) {
-    return PublishServerState.CONNECTING
+  if (a === TransportState.CONNECTING || b === TransportState.CONNECTING) {
+    return TransportState.CONNECTING
   }
-  if (a === PublishServerState.BROKEN || b === PublishServerState.BROKEN) {
-    return PublishServerState.BROKEN
+  if (a === TransportState.BROKEN || b === TransportState.BROKEN) {
+    return TransportState.BROKEN
   }
-  return PublishServerState.EMPTY
+  return TransportState.EMPTY
 }
 
-class PublishServerSet extends ConfigSet {
+class TransportSet extends ConfigSet {
   constructor (keys) {
     super(opts => {
-      const publishServer = new PublishServer(opts, keys)
+      const transport = new Transport(opts, keys)
       if (this.isGatheringTraffic) {
-        publishServer.on('traffic', this.gatherTraffic)
+        transport.on('traffic', this.gatherTraffic)
       }
-      this._addresses.add(publishServer.addresses)
-      publishServer.on('state', state => this._setState(publishServer, state))
-      publishServer.on('connection', (address, connection) => this.emit('connection', address, connection))
+      this._addresses.add(transport.addresses)
+      transport.on('state', state => this._setState(transport, state))
+      transport.on('connection', (address, connection) => this.emit('connection', address, connection))
       return {
         close: cb => {
-          this._addresses.delete(publishServer.addresses)
-          publishServer.close(err => {
+          this._addresses.delete(transport.addresses)
+          transport.close(err => {
             if (err) return cb(err)
-            this._setState(publishServer, null)
-            publishServer.removeAllListeners()
+            this._setState(transport, null)
+            transport.removeAllListeners()
             return cb()
           })
         }
@@ -82,7 +82,7 @@ class PublishServerSet extends ConfigSet {
     } else {
       this._states.set(server, serverState)
     }
-    const state = reduce(this._states, reduceState, PublishServerState.EMPTY)
+    const state = reduce(this._states, reduceState, TransportState.EMPTY)
     if (state !== this._state) {
       this._state = state
       this.emit('state', state)
@@ -90,4 +90,4 @@ class PublishServerSet extends ConfigSet {
   }
 }
 
-module.exports = PublishServerSet
+module.exports = TransportSet
