@@ -7,7 +7,7 @@ module.exports = {
   create: (options, emitter, peers) => {
     let dht
     return {
-      open: function () {
+      open () {
         dht = createDht({
           bootstrap: options.bootstrap
         })
@@ -17,12 +17,12 @@ module.exports = {
         dht.on('warn', emitter.emit.bind(emitter, 'warning'))
         dht.on('listening', emitter.emit.bind(emitter, 'listening'))
       },
-      lookup: function (key, cb) {
+      lookup (key, cb) {
         dht.lookup(key, function (err, data, more) {
           cb()
         })
       },
-      announce: function (key, address, cb) {
+      announce (key, address, cb) {
         // TODO: announce only hosts that are non-local
         dht.announce(key, address.port, function (err) {
           if (err) {
@@ -32,7 +32,7 @@ module.exports = {
           cb()
         })
       },
-      unannounce: function (key, address, cb) {
+      unannounce (key, address, cb) {
         // TODO: announce only hosts that are non-local
         dht.unannounce(key, address.port, function (err) {
           // TODO error handling (eventually a lock might be a good idea?)
@@ -40,7 +40,7 @@ module.exports = {
           cb()
         })
       },
-      close: function () {
+      close () {
         dht.removeAllListeners()
         dht.on('error', err => {})
         dht.destroy(function (err) {

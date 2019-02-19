@@ -21,7 +21,7 @@ function _getId (res, name) {
 
 exports = {
   validate: (config) => true,
-  create: (config, emitter, peers, keyAddressPair) => {
+  create (config, emitter, peers, keyAddressPair) {
     const domain = config.domain || 'hyperswarm.local'
     const tld = '.' + domain
     let mDNS = null

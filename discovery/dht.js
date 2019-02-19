@@ -12,23 +12,23 @@ function noop () {}
 
 module.exports = {
   validate: (config) => true,
-  create: (config, emitter, peers) => {
+  create (config, emitter, peers) {
     let rpc
     return {
       open,
-      lookup: function (key, cb) {
+      lookup (key, cb) {
         handleStream(key, null, rpc.query('peers', Buffer.from(key, 'hex'), {}, err => {
           // TODO: What to do with an error?
           cb()
         }))
       },
-      announce: function (key, address, cb) {
+      announce (key, address, cb) {
         queryAndUpdate(key, addressToPacket(address, ANNOUNCE_FLAG), cb)
       },
-      unannounce: function (key, address, cb) {
+      unannounce (key, address, cb) {
         queryAndUpdate(key, addressToPacket(address, UNANNOUNCE_FLAG), cb)
       },
-      close: function () {
+      close () {
         rpc.removeAllListeners()
         rpc.on('error', err => emitter.emit('close', err))
         rpc.on('close', () => emitter.emit('close'))
