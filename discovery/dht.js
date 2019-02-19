@@ -114,8 +114,8 @@ module.exports = {
           limit(
             128,
             filter(
-              peers.get(topic),
-              record => record.hash !== remoteRecord
+              record => record.hash !== remoteRecord,
+              peers.get(topic)
             )
           )
         )

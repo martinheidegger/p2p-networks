@@ -63,12 +63,12 @@ exports = {
     function onQuery (res, rinfo) {
       const answers = toArray(combine(
         map(
-          filter(res.questions, q => q.type === 'SRV' && answersByName.has(q.name)),  
+          filter(q => q.type === 'SRV' && answersByName.has(q.name), res.questions),  
           q => {
             let answers = answersByName.get(q.name).values()
             const id = _getId(res, q.name)
             if (id) {
-              return filter(answers, announcement => announcement.id.equals(id))
+              return filter(announcement => announcement.id.equals(id), answers)
             }
             return answers
           }
