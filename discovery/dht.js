@@ -112,11 +112,11 @@ module.exports = {
       if (query.type === DHT.QUERY) {
         const remote = Array.from(
           limit(
+            128,
             filter(
               peers.get(topic),
               record => record.hash !== remoteRecord
-            ),
-            128
+            )
           )
         )
         // this.emit('lookup', query.target, remoteRecord)
