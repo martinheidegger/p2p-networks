@@ -33,9 +33,9 @@ function reduceState (a, b) {
 }
 
 class TransportSet extends ConfigSet {
-  constructor (keys) {
+  constructor (services, keys) {
     super(opts => {
-      const transport = new Transport(opts, keys)
+      const transport = new Transport(services, opts, keys)
       if (this.isGatheringTraffic) {
         transport.on('traffic', this.gatherTraffic)
       }

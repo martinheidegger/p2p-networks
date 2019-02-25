@@ -4,12 +4,6 @@ const serviceLookup = require('./lib/serviceLookup.js')
 const EventedMapOfSets = require('./lib/EventedMapOfSets.js')
 const rangeInterval = require('./lib/rangeInterval.js')
 
-const services = serviceLookup({
-  "dht-legacy": () => require('./discovery/dht-legacy'),
-  dht: () => require('./discovery/dht'),
-  dns: () => require('./discovery/dns')
-})
-
 function stateMgr (onChange, state) {
   return {
     state,
@@ -35,17 +29,13 @@ class Discovery extends EventEmitter {
   static STATE_CLOSED = Symbol('closed')
   static STATE_WAITING = Symbol('waiting - No connection available')
 
-  static verify (config) {
-    return services(config).verify()
-  }
-
-  constructor (config, keyByAddress) {
+  constructor (services, config, keyByAddress) {
     super()
     this._config = config
     this._peers = new EventedMapOfSets()
     this.closed = new Promise(resolve => this.on('close', resolve))
 
-    const service = services(config).create(this, this._peers, keyByAddress)
+    const service = serviceLookup(services, config).create(this, this._peers, keyByAddress)
     const removeKeyAdress = (key, address) => {
       service.unannounce(key, address)
       if (keyByAddress.y.size === 0) {

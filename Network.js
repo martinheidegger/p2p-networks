@@ -79,7 +79,7 @@ class ReplicationStateSet extends ReplicationState {
 }
 
 class Network {
-  constructor (config) {
+  constructor (services, config) {
     this._config = {
       paused: false,
       discovery: [],
@@ -88,12 +88,12 @@ class Network {
     this._lock = createLockCb()
     this._replications = new MapOfSets()
     this._keys = new EventedSet()
-    this._transportSet = new TransportSet(this._keys)
+    this._transportSet = new TransportSet(services.transport, this._keys)
     const keyByAddress = new Evented2DMatrix(
       this._keys,
       this._transportSet.addresses
     )
-    this._discoverySet = new DiscoverySet(keyByAddress)
+    this._discoverySet = new DiscoverySet(services.discovery, keyByAddress)
     this._transportSet.on('connection', (address, connection) => {
       // Now we need to make sure that the connection is connected
       // to the correct replications

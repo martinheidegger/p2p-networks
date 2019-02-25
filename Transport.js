@@ -3,10 +3,6 @@ const EventEmitter = require('events').EventEmitter
 const serviceLookup = require('./lib/serviceLookup.js')
 const EventedSet = require('./lib/EventedSet.js')
 
-const lookup = serviceLookup({
-  tcp: () => require('./transport/tcp')
-})
-
 const TransportState = {
   CONNECTED: 'connected',
   CONNECTING: 'connecting',
@@ -16,16 +12,13 @@ const TransportState = {
 }
 
 class Transport extends EventEmitter {
-  static verify (config) {
-    return lookup(config).verify()
-  }
 
-  constructor (config, keys) {
+  constructor (services, config, keys) {
     super()
     this._config = config
     const addresses = new EventedSet()
     this._addresses = addresses
-    this._service = lookup(config).create(this, keys, addresses)
+    this._service = serviceLookup(services, config).create(this, keys, addresses)
   }
 
   get addresses () {
