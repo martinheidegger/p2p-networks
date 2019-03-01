@@ -9,5 +9,6 @@ tape('tuples', t => {
   t.deepEquals(toArray(tuples([1], x => typeof x === 'number', y => true, (x, y) => y + x)), undefined, 'not enough match')
   t.deepEquals(toArray(tuples([1, 'a', 2, 'b'], x => typeof x === 'number', y => true, (x, y) => y + x)), ['a1', 'b2'], 'simple tuple')
   t.deepEquals(toArray(tuples([1, 'a', 'r', 2, 'b'], x => typeof x === 'number', y => true, (x, y) => y + x)), ['a1', 'b2'], 'non-matching interloper')
+  t.deepEquals(toArray(tuples([1, 'a', 2, 'b'], () => true, () => true)), [[1, 'a'], [2, 'b']], 'Without each operator')
   t.end()
 })
