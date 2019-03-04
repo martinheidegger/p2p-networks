@@ -102,10 +102,10 @@ test('iteration', async t => {
   let count = 0
   for (const entry of set) {
     count++
-    if (count === 1) return t.deepEquals(entry, ['x', 'y'])
-    if (count === 2) return t.deepEquals(entry, ['x', 'z'])
-    if (count === 3) return t.deepEquals(entry, ['a', 'b'])
-    if (count === 4) return t.deepEquals(entry, ['a', 'z'])
+    if (count === 1) return t.deepEquals(entry, { key: 'x', value: 'y' })
+    if (count === 2) return t.deepEquals(entry, { key: 'x', value: 'z' })
+    if (count === 3) return t.deepEquals(entry, { key: 'a', value: 'b' })
+    if (count === 4) return t.deepEquals(entry, { key: 'a', value: 'z' })
     t.fail('Unexpected')
   }
   t.equal(count, 4)
