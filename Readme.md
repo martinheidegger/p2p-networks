@@ -56,7 +56,7 @@ network.update({
   }
 })
 // Logging the state of the network
-network.on('data', stats => console.log(state) )
+network.on('stats', stats => console.log(stats))
 
 const readKey = '...' // Key used to ensure that just the correct data is sent through the channel
 const discoveryKey = '...' // Key that is used to lookup the entry in the discovery channel
@@ -67,7 +67,7 @@ function createReplication () `{
 
 const replicationStats = network.replicate(readKey, discoveryKey, createReplicationStream)
 // Here we can track the replication state 
-replicationStats.on('data', state => console.log(state))
+replicationStats.on('stats', state => console.log(state))
 
 network.update({
   paused: true
