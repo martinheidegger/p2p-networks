@@ -1,10 +1,10 @@
 'use strict'
-const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
 const tape = require('tape')
+const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
 const toArray = require('../../lib/iter/toArray.js')
 
 function test (name, fn) {
-  tape(name, t => {
+  tape(`EventedMapOfSets > ${name}`, t => {
     fn(t)
       .catch(err => t.fail(err))
       .then(() => t.end())
@@ -91,4 +91,22 @@ test('events', async t => {
     { del: { key: 'a', value: 'b', valueOrHash: 'b' } },
     { del: { key: 'x', value: 'y', valueOrHash: 'y' } }
   ])
+})
+
+test('iteration', async t => {
+  const set = new EventedMapOfSets()
+  await set.add('x', 'y')
+  await set.add('x', 'z')
+  await set.add('a', 'b')
+  await set.add('a', 'z')
+  let count = 0
+  for (const entry of set) {
+    count++
+    if (count === 1) return t.deepEquals(entry, ['x', 'y'])
+    if (count === 2) return t.deepEquals(entry, ['x', 'z'])
+    if (count === 3) return t.deepEquals(entry, ['a', 'b'])
+    if (count === 4) return t.deepEquals(entry, ['a', 'z'])
+    t.fail('Unexpected')
+  }
+  t.equal(count, 4)
 })
