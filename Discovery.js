@@ -3,19 +3,8 @@ const EventEmitter = require('events').EventEmitter
 const serviceLookup = require('./lib/serviceLookup.js')
 const EventedMapOfSets = require('./lib/EventedMapOfSets.js')
 const rangeInterval = require('./lib/rangeInterval.js')
+const stateMgr = require('./lib/stateMgr.js')
 
-function stateMgr (onChange, state) {
-  return {
-    state,
-    set: function setState (newState) {
-      if (state !== newState) {
-        let oldState = state
-        state = newState
-        onChange(newState, oldState)
-      }
-    }
-  }
-}
 
 const LOOKUP = {
   IDLE: Symbol('Idle.'),
