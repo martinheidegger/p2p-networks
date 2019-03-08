@@ -4,6 +4,24 @@ const createLockCb = require('flexlock-cb').createLockCb
 const mapEach = require('map-each').mapEach
 const objectHash = require('object-hash')
 
+function chain (args, op, next) {
+  if (op.length < args.length) {
+    return new Promise((resolve, reject) => {
+      args[args.length - 1] = (err, data) => {
+        if (err) return reject(err)
+        resolve(data)
+      }
+      chain(args, op)
+    })
+  }
+  const cb = args[args.length - 1]
+  args[args.length - 1] = function (err, data) {
+    if (err) return cb(err)
+    next(data, cb)
+  }
+  op.apply(null, args)
+}
+
 function configHash (config) {
   return objectHash(config, {
     encoding: 'base64',
@@ -23,98 +41,93 @@ class ConfigSet extends EventEmitter {
     this._closed = false
   }
 
-  update (iterable) {
-    if (this._closed) return
-    let added = []
-    let removed = new Set(this._instances.keys())
-    const iter = iterable[Symbol.iterator]()
-    let next
-    while ((next = iter.next()) && !next.done) {
-      const config = next.value
-      const hash = configHash(config)
-      if (removed.has(hash)) {
-        removed.delete(hash)
-      } else {
-        added.push({
-          hash, config
-        })
-      }
-    }
-    this._lock(unlock => {
-      mapEach(removed, (hash, cb) => {
-        if (this._closed) return cb()
-        this._remove(hash, cb)
-      }, 1, err => {
-        if (this._closed) return unlock()
-        if (err) {
-          return unlock(err)
+  update (iterable, cb) {
+    return this._lock(unlock => {
+      if (this._closed) return unlock(null, false)
+      const added = []
+      const deleted = new Set(this._instances.keys())
+      for (const config of iterable) {
+        const hash = configHash(config)
+        if (deleted.has(hash)) {
+          deleted.delete(hash)
+        } else {
+          added.push({ hash, config })
         }
-        mapEach(added, (entry, cb) => this._add(entry.config, entry.hash, cb), 1, unlock)
-      })
-    }, 0, err => { /* TODO: HANDLE ERROR */ })
+      }
+      mapEach(
+        // TODO: parallel closing?
+        deleted,
+        (hash, cb) => this._delete(hash, cb),
+        err => {
+          if (err) return unlock(err)
+          mapEach(
+            added,
+            (entry, cb) => this._add(entry.config, entry.hash, cb),
+            unlock
+          )
+        }
+      )
+    }, cb)
   }
 
-  clear (cb) {
-    return this._lock(unlock => {
-      mapEach(this._instances.entries(), (tuple, cb) => {
-        if (this._closed) return cb()
-        const hash = tuple[0]
-        const instance = tuple[1]
-        instance.close(err => {
-          if (err) {
-            return cb(err)
-          }
-          this._instances.delete(hash)
-          unlock()
-        })
-      }, unlock)
-    }, cb)
+  clear (clearCb) {
+    return this._lock(unlock => mapEach(
+      this._instances.keys(),
+      (hash, cb) => this._delete(hash, cb),
+      unlock
+    ), clearCb)
   }
 
   _add (config, hash, cb) {
-    return this._lock(unlock => {
-      let instance = this._instances.get(hash)
-      if (instance) {
-        return unlock(null, false)
+    const entry = this._instances.get(hash)
+    if (entry) {
+      return cb(null, false)
+    }
+    this._createInstance(config, (err, instance) => {
+      if (err) {
+        this.emit('warning', Object.assign(new Error('Couldnt create config instance.'), { config, hash, cause: err, source: this }))
+        return cb(null, false)
       }
-      try {
-        instance = this._createInstance(config)
-      } catch (err) {
-        // TODO: log that error
-        return unlock(null, false)
-      }
-      this._instances.set(hash, instance)
-      unlock(null, true)
-    }, cb)
+      this._instances.set(hash, { instance, config })
+      this.emit('add', instance, config, hash)
+      cb(null, true)
+    })
   }
 
-  _remove (hash, cb) {
-    return this._lock(unlock => {
-      if (this._closed || !this._instances.has(hash)) {
-        return unlock(null, false)
+  _delete (hash, cb) {
+    const entry = this._instances.get(hash)
+    if (!entry) {
+      return cb(null, false)
+    }
+    entry.instance.close(err => {
+      if (err) {
+        this.emit('warning', Object.assign(new Error('Error while closing instance.'), { hash, cause: err, source: this }))
       }
-      const instance = this._instances.get(hash)
-      instance.close(err => {
-        if (err) return unlock(err)
-        this._instances.delete(hash)
-        unlock(null, true)
-      })
-    }, cb)
+      this._instances.delete(hash)
+      this.emit('delete', entry.instance, entry.config, hash)
+      cb(null, true)
+    })
   }
 
-  close (cb) {
-    this.clear(err => {
+  close (_) {
+    return chain(arguments, () => this.clear(), cb => {
       this._closed = true
-      cb(err)
+      cb()
     })
   }
 
   add (config, cb) {
-    return this._add(config, configHash(config), cb)
+    return this._lock(unlock => {
+      if (this._closed) return unlock(null, false)
+      this._add(config, configHash(config), unlock)
+    }, cb)
   }
 
-  remove (config, cb) {
-    return this._remove(configHash(config), cb)
+  delete (config, cb) {
+    return this._lock(unlock => {
+      if (this._closed) return unlock(null, false)
+      this._delete(configHash(config), unlock)
+    }, cb)
   }
 }
 

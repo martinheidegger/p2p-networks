@@ -34,15 +34,20 @@ function reduceState (a, b) {
 
 class TransportSet extends ConfigSet {
   constructor (services, keys) {
-    super(opts => {
-      const transport = new Transport(services, opts, keys)
-      if (this.isGatheringTraffic) {
-        transport.on('traffic', this.gatherTraffic)
+    super((config, cb) => {
+      let transport
+      try {
+        transport = new Transport(services, config, keys)
+        if (this.isGatheringTraffic) {
+          transport.on('traffic', this.gatherTraffic)
+        }
+        this._addresses.add(transport.addresses)
+        transport.on('state', state => this._setState(transport, state))
+        transport.on('connection', (address, connection) => this.emit('connection', address, connection))
+      } catch (err) {
+        return cb(err)
       }
-      this._addresses.add(transport.addresses)
-      transport.on('state', state => this._setState(transport, state))
-      transport.on('connection', (address, connection) => this.emit('connection', address, connection))
-      return {
+      return cb(null, {
         close: cb => {
           this._addresses.delete(transport.addresses)
           transport.close(err => {
@@ -52,7 +57,7 @@ class TransportSet extends ConfigSet {
             return cb()
           })
         }
-      }
+      })
     })
 
     this._addresses = new EventedSetOfSets()

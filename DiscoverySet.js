@@ -6,10 +6,14 @@ const EventedMergedMap = require('./lib/EventedMergedMap.js')
 class DiscoverySet extends ConfigSet {
 
   constructor (services, keyByAddress) {
-    super(config => {
-      const discovery = new Discovery(services, config, keyByAddress)
-      this._peers.add(discovery.peers)
-      return {
+    super((config, cb) => {
+      let discovery
+      try {
+        discovery = new Discovery(services, config, keyByAddress)
+      } catch (err) {
+        return cb(err)
+      }
+      cb(null, {
         close: cb => {
           this._peers.delete(discovery.peers)
           discovery.close((err) => {
@@ -18,7 +22,7 @@ class DiscoverySet extends ConfigSet {
             return cb()
           })
         }
-      }
+      })
     })
 
     this._peers = new EventedMergedMap()
