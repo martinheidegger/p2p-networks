@@ -1,19 +1,19 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const toBuffer = require('../../../lib/iter/toBuffer.js')
 
-tape('iter/toBuffer > empty', t => {
+tape('empty', t => {
   t.equals(toBuffer([]), undefined)
   t.end()
 })
 
-tape('iter/toBuffer > 1', t => {
+tape('1', t => {
   const buf = Buffer.from('a')
   t.equals(toBuffer([buf]), buf)
   t.end()
 })
 
-tape('iter/toBuffer > 2', t => {
+tape('2', t => {
   t.equals(toBuffer([Buffer.from('a'), Buffer.from('b')]).toString(), 'ab')
   t.end()
 })

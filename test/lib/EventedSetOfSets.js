@@ -1,7 +1,7 @@
 'use strict'
 const EventedSet = require('../../lib/EventedSet.js')
 const EventedSetOfSets = require('../../lib/EventedSetOfSets.js')
-const tape = require('tape')
+const tape = require('tape-x')()
 
 tape('basic op', t => {
   const set = new EventedSet()

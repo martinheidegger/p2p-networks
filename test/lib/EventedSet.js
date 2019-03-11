@@ -1,6 +1,6 @@
 'use strict'
 const EventedSet = require('../../lib/EventedSet.js')
-const tape = require('tape')
+const tape = require('tape-x')()
 
 tape('adding sends event', t => {
   const set = new EventedSet()

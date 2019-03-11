@@ -1,9 +1,9 @@
 'use strict'
 const combineTwo = require('../../../lib/iter/combineTwo.js')
 const toArray = require('../../../lib/iter/toArray.js')
-const tape = require('tape')
+const tape = require('tape-x')()
 
-tape('combine with iterators', t => {
+tape('basic tests', t => {
   t.deepEquals(toArray(combineTwo()), undefined, 'empty')
   t.deepEquals(toArray(combineTwo([])), undefined, 'empty item')
   t.deepEquals(toArray(combineTwo([1], [2])), [1, 2], 'two arrays')

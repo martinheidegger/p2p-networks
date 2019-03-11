@@ -1,5 +1,5 @@
 'use strict'
-const test = require('tape')
+const test = require('tape-x')()
 const dht = require('../../discovery/dht-legacy.js')
 const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
 const EventEmitter = require('events').EventEmitter

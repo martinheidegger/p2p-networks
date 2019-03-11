@@ -1,22 +1,14 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const EventedSet = require('../../lib/EventedSet.js')
 const Evented2DMatrix = require('../../lib/Evented2DMatrix.js')
 const toArray = require('../../lib/iter/toArray.js')
-
-function test (name, fn) {
-  tape(`Evented2DMatrix > ${name}`, t => {
-    fn(t)
-      .catch(err => t.fail(err))
-      .then(() => t.end())
-  })
-}
 
 function immediate () {
   return new Promise(setImmediate)
 }
 
-test('basic', async t => {
+tape('basic', async t => {
   const keys = new EventedSet()
   const values = new EventedSet()
   const mtx = new Evented2DMatrix(keys, values)
@@ -43,7 +35,7 @@ test('basic', async t => {
   ])
 })
 
-test('events', async t => {
+tape('events', async t => {
   const keys = new EventedSet()
   const values = new EventedSet()
   const mtx = new Evented2DMatrix(keys, values)

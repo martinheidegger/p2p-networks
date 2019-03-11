@@ -1,9 +1,9 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const ipv4Peers = require('ipv4-peers')
 const createPeer = require('../../lib/createPeer')
 
-tape('createPeer > basic', t => {
+tape('basic', t => {
   const peer = createPeer(8080, '127.0.0.1')
   t.equals(peer.port, 8080)
   t.equals(peer.host, '127.0.0.1')

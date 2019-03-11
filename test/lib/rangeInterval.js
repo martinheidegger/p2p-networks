@@ -1,6 +1,6 @@
 'use strict'
 const { parse, set, clear } = require('../../lib/rangeInterval')
-const tape = require('tape')
+const tape = require('tape-x')()
 
 tape('parsing', t => {
   t.deepEquals(parse(1000), { min: 1000, vary: 0 }, 'number')

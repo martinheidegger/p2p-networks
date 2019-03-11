@@ -1,5 +1,5 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const ConfigSet = require('../ConfigSet.js')
 
 tape ('simple adding config', t => {

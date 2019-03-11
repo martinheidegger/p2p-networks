@@ -1,8 +1,8 @@
 'use strict'
 const reduce = require('../../../lib/iter/reduce.js')
-const tape = require('tape')
+const tape = require('tape-x')()
 
-tape('reduce', t => {
+tape('basic tests', t => {
   t.deepEquals(reduce(undefined, []), undefined, 'empty')
   t.deepEquals(reduce(x => x, [1]), 1, 'one item')
   t.deepEquals(reduce(x => x, [1, 2]), 1, 'two items')

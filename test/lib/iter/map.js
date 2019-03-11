@@ -1,9 +1,9 @@
 'use strict'
 const map = require('../../../lib/iter/map.js')
 const toArray = require('../../../lib/iter/toArray.js')
-const tape = require('tape')
+const tape = require('tape-x')()
 
-tape('map', t => {
+tape('basic tests', t => {
   t.deepEquals(toArray(map(undefined, [])), undefined, 'empty')
   t.deepEquals(toArray(map(x => x, [1])), [1], 'one item')
   t.deepEquals(toArray(map(x => x + 1, [2])), [3], 'one item with op')

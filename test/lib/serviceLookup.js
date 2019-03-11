@@ -1,5 +1,5 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const serviceLookup = require('../../lib/serviceLookup.js')
 
 tape('error: empty config', t => {

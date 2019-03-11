@@ -1,5 +1,5 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const { EventEmitter } = require('events')
 const toggleListener = require('../../lib/toggleListener.js')
 

@@ -1,17 +1,9 @@
 'use strict'
-const tape = require('tape')
+const tape = require('tape-x')()
 const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
 const toArray = require('../../lib/iter/toArray.js')
 
-function test (name, fn) {
-  tape(`EventedMapOfSets > ${name}`, t => {
-    fn(t)
-      .catch(err => t.fail(err))
-      .then(() => t.end())
-  })
-}
-
-test('basics: empty', async t => {
+tape('basics: empty', async t => {
   const set = new EventedMapOfSets()
   t.equals(set.hasEntry('x', 'y'), false)
   for (const entry of set.get('x')) {
@@ -19,7 +11,7 @@ test('basics: empty', async t => {
   }
 })
 
-test('basics: add', async t => {
+tape('basics: add', async t => {
   const set = new EventedMapOfSets()
   t.equals(await set.add('x', 'y'), true)
   t.equals(set.hasEntry('x', 'y'), true)
@@ -29,7 +21,7 @@ test('basics: add', async t => {
   t.deepEquals(toArray(set.get('x')), ['y', 'z'])
 })
 
-test('basics: remove', async t => {
+tape('basics: remove', async t => {
   const set = new EventedMapOfSets()
   t.equals(await set.delete('x', 'y'), false)
   await set.add('x', 'y')
@@ -41,7 +33,7 @@ test('basics: remove', async t => {
   }
 })
 
-test('basics: add-hash', async t => {
+tape('basics: add-hash', async t => {
   const set = new EventedMapOfSets()
   t.equals(await set.add('x', 'y', 'r'), true)
   t.equals(await set.add('x', 'z', 'r'), false, 'different item with same hash')
@@ -53,7 +45,7 @@ test('basics: add-hash', async t => {
   }
 })
 
-test('basics: clear', async t => {
+tape('basics: clear', async t => {
   const set = new EventedMapOfSets()
   await set.add('x', 'y')
   await set.add('a', 'b')
@@ -62,7 +54,7 @@ test('basics: clear', async t => {
   t.equals(set.hasEntry('a', 'b'), false)
 })
 
-test('events', async t => {
+tape('events', async t => {
   const set = new EventedMapOfSets()
   const stack = []
   set.on('add', (key, value, valueOrHash) => {
@@ -93,7 +85,7 @@ test('events', async t => {
   ])
 })
 
-test('iteration', async t => {
+tape('iteration', async t => {
   const set = new EventedMapOfSets()
   await set.add('x', 'y')
   await set.add('x', 'z')
