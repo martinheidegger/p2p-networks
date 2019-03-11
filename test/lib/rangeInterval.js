@@ -67,3 +67,23 @@ tape('Ranged interval is ranged', t => {
     t.end()
   }, '1~20')
 })
+
+tape('range errors are errors', t => {
+  t.plan(1)
+  try {
+    parse('x')
+  } catch (err) {
+    t.equals(err.code, 'EINTINVALID')
+  }
+  t.end()
+})
+
+tape('second part can have errors too', t => {
+  t.plan(1)
+  try {
+    parse('10~d')
+  } catch (err) {
+    t.equals(err.code, 'EINTSECONDEMPTY')
+  }
+  t.end()
+})
