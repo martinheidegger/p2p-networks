@@ -2,16 +2,17 @@
 const EventEmitter = require('events').EventEmitter
 const createLockCb = require('flexlock-cb').createLockCb
 const mapEach = require('map-each').mapEach
-const objectHash = require('object-hash')
+const configHash = require('./lib/configHash.js')
 
 function chain (args, op, next) {
-  if (op.length < args.length) {
+  if (op.length > args.length) {
     return new Promise((resolve, reject) => {
-      args[args.length - 1] = (err, data) => {
+      args[args.length] = (err, data) => {
         if (err) return reject(err)
         resolve(data)
       }
-      chain(args, op)
+      args.length += 1
+      chain(args, op, next)
     })
   }
   const cb = args[args.length - 1]
@@ -20,16 +21,6 @@ function chain (args, op, next) {
     next(data, cb)
   }
   op.apply(null, args)
-}
-
-function configHash (config) {
-  return objectHash(config, {
-    encoding: 'base64',
-    respectType: false,
-    unorderedArray: false,
-    unorderedSets: true,
-    unorderedObject: true,
-  })
 }
 
 class ConfigSet extends EventEmitter {
@@ -101,7 +92,7 @@ class ConfigSet extends EventEmitter {
     }
     entry.instance.close(err => {
       if (err) {
-        this.emit('warning', Object.assign(new Error('Error while closing instance.'), { hash, cause: err, source: this }))
+        this.emit('warning', Object.assign(new Error('Error while closing instance.'), { config: entry.config, hash, cause: err, source: this }))
       }
       this._instances.delete(hash)
       this.emit('delete', entry.instance, entry.config, hash)
@@ -110,7 +101,7 @@ class ConfigSet extends EventEmitter {
   }
 
   close (_) {
-    return chain(arguments, () => this.clear(), cb => {
+    return chain(arguments, cb => this.clear(cb), (_, cb) => {
       this._closed = true
       cb()
     })
