@@ -2,6 +2,8 @@
 const test = require('tape-x')()
 const dht = require('../../discovery/dht.js')
 const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
+const Evented2DMatrix = require('../../lib/Evented2DMatrix.js')
+const EventedSet = require('../../lib/EventedSet.js')
 const EventEmitter = require('events').EventEmitter
 const crypto = require('crypto')
 const DHT = require('dht-rpc')
@@ -20,10 +22,19 @@ test('before', t => {
   })
 })
 
-function create () {
+function create (opts) {
+  if (typeof opts === 'string') {
+    opts = { name: opts }
+  }
   const event = new EventEmitter()
   const peers = new EventedMapOfSets()
-  const service = dht.create({ bootstrap }, event, peers)
+  const keyByAddress = new Evented2DMatrix(new EventedSet(), new EventedSet())
+  const service = dht.create({
+    bootstrap,
+    port: 0,
+    // addr: 'localhost',
+    ...opts
+  }, event, peers, keyByAddress)
   return { service, event, peers }
 }
 
@@ -71,6 +82,53 @@ test('connecting to localhost', t => {
   })
   a.event.on('warning', function (warn) {
     console.log(warn)
+  })
+  a.service.open()
+})
+
+test('testing interval lookup', t => {
+  t.plan(4)
+  const topic = crypto.randomBytes(32).toString('hex')
+  const a = create({
+    name: 'a',
+    port: 3456
+  })
+  const peerKnownByA = ipv4Peers.encode([{ port: 1234, host: '192.168.1.0' }])
+  a.peers.add(topic, peerKnownByA, peerKnownByA.asString)
+  a.event.on('listening', function () {
+    a.service.announce(topic, {
+      port: '1234',
+      localAddress: { port: '1234', host: '127.0.0.1' }
+    }, () => {
+      b.service.lookup(topic, noop)
+    })
+    const b = create({
+      name: 'b',
+      port: 3457
+    })
+    setImmediate(() => {
+      b.event.on('warning', function (warn) {
+        console.log('↓ WARN2 ↓')
+        console.log(warn)
+      })
+      b.peers.on('add', (key, peer, hash) => {
+        t.equals(key, topic, 'we should have found the peer for the topic!')
+        t.deepEquals(ipv4Peers.decode(peer), [{
+          host: '192.168.1.0',
+          port: 1234
+        }], 'the peer matches our expectations')
+        t.equals(hash, 'wKgBAATS', 'the peers hash also matches our expectations')
+        setImmediate(async () => {
+          await a.service.close()
+          await b.service.close()
+          t.end()
+        })
+      })
+      b.service.open()
+    })
+  })
+  a.event.on('warning', function (warn) {
+    t.pass('warning received because b wasnt started yet')
   })
   a.service.open()
 })

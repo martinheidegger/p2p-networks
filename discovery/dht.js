@@ -2,8 +2,8 @@
 const { DHT } = require('dht-rpc')
 const { PeersInput, PeersOutput } = require('@hyperswarm/dht/messages.js')
 const ipv4Peers = require('ipv4-peers')
-const filter = require('../lib/iter/filter.js')
-const limit = require('../lib/iter/limit.js')
+const createPeer = require('../lib/createPeer.js')
+const collectPeers = require('../lib/collectPeers.js')
 
 const ANNOUNCE_FLAG = Symbol('announce')
 const UNANNOUNCE_FLAG = Symbol('unannounce')
@@ -12,15 +12,27 @@ function noop () {}
 
 module.exports = {
   validate: (config) => true,
-  create (config, emitter, peers) {
+  create ({ bootstrap, port, addr }, emitter, peers, keyByAddress) {
     let rpc
     return {
       open,
       lookup (key, cb) {
-        handleStream(key, null, rpc.query('peers', Buffer.from(key, 'hex'), {}, err => {
-          // TODO: What to do with an error?
-          cb()
-        }))
+        const keyBuffer = Buffer.from(key, 'hex')
+        handleStream(
+          key,
+          null,
+          rpc.query('peers', keyBuffer, {}),
+          err => {
+            if (err) {
+              emitter.emit('warning', Object.assign(new Error('Error during query'), {
+                code: 'EDHTLOOKUP',
+                key,
+                cause: err
+              }))
+            }
+            cb()
+          }
+        )
       },
       announce (key, address, cb) {
         queryAndUpdate(key, addressToPacket(address, ANNOUNCE_FLAG), cb)
@@ -30,7 +42,13 @@ module.exports = {
       },
       close () {
         rpc.removeAllListeners()
-        rpc.on('error', err => emitter.emit('close', err))
+        rpc.on('error', err => {
+          emitter.emit('warning', Object.assign(new Error('Error while closing'), {
+            code: 'EDHTCLOSE',
+            cause: err
+          }))
+          emitter.emit('close')
+        })
         rpc.on('close', () => emitter.emit('close'))
         rpc.destroy()
         rpc = null
@@ -39,100 +57,97 @@ module.exports = {
 
     function open () {
       rpc = new DHT({
-        bootstrap: config.bootstrap,
+        bootstrap: bootstrap,
         ephemeral: false
       })
       rpc.on('close', onUnexpectedClose)
       rpc.on('error', onUnexpectedClose)
-      rpc.on('warning', err => {
-        emitter.emit('warning', err)
-      })
-      rpc.on('listening', data => {
-        emitter.emit('listening')
-      })
+      rpc.on('warning', emitter.emit.bind(emitter, 'warning'))
+      rpc.on('listening', emitter.emit.bind(emitter, 'listening'))
       rpc.command('peers', {
         inputEncoding: PeersInput,
         outputEncoding: PeersOutput,
-        update: onpeers,
-        query: onpeers
+        update: peersQueryHandler,
+        query: peersQueryHandler
       })
+      rpc.listen(port, addr)
     }
 
     function queryAndUpdate (key, packet, cb) {
       const host = hostForPackage(packet)
-      handleStream(key, host, rpc.queryAndUpdate('peers', Buffer.from(key, 'hex'), packet, err => {
-        // TODO: What to do with an error?
-        cb()
-      }))
+      handleStream(
+        key,
+        host,
+        rpc.queryAndUpdate('peers', Buffer.from(key, 'hex'), packet),
+        err => {
+          if (err) {
+            emitter.emit('warning', Object.assign(new Error('Error during query'), {
+              code: 'EDHTQUERY',
+              key,
+              packet,
+              cause: err
+            }))
+          }
+          cb()
+        }
+      )
     }
 
-    function handleStream (key, host, stream) {
+    function handleStream (key, host, stream, cb) {
       stream
         .on('data', data => {
           const v = data.value
           if (!v || (!v.peers && !v.localPeers)) return
-          const peer = {
-            node: data.node,
-            peers: v.peers && ipv4Peers.decode(v.peers),
-            localPeers: host && v.localPeers && decodeLocalPeers(host, v.localPeers)
-          }
-          if (v.unannounce) {
-            peers.deleteSimilar(key, peer)
-          } else {
-            peers.addSimilar(key, peer)
+          if (v.peers) {
+            const simplePeers = ipv4Peers.decode(v.peers)
+            for (const simplePeer of simplePeers) {
+              const peer = createPeer(simplePeer.port, simplePeer.host)
+              if (v.unannounce) {
+                peers.delete(key, peer, peer.asString)
+              } else {
+                peers.add(key, peer, peer.asString)
+              }
+            }
           }
         })
         .on('error', err => {
-          // TODO: new Error('No nodes responded')
-          // TODO: new Error('No close nodes responded')
+          stream.removeListener('end', cb || noop)
+          cb(err)
         })
+        .on('end', cb)
     }
 
     function onUnexpectedClose (err) {
-      if (err !== null) {
-        emitter.emit('warning', err)
-      }
+      emitter.emit('warning', Object.assign(new Error('DHT unexpectedly closed.'), {
+        code: 'EDHTCLOSED',
+        cause: err
+      }))
       rpc.removeAllListeners()
       rpc.on('error', noop)
       rpc = null
       emitter.emit('unlistening')
     }
 
-    function onpeers (query, cb) {
+    function peersQueryHandler (query, cb) {
       const value = query.value || {}
       const port = value.port || query.node.port
       if (!(port > 0 && port < 65536)) return cb(new Error('Invalid port'))
 
-      const remoteRecord = ipv4Peers.encode([ { port, host: query.node.host } ])
-      remoteRecord.port = port
-      remoteRecord.host = query.node.host
-      remoteRecord.hash = remoteRecord.toString('base64')
+      const remoteRecord = createPeer(port, query.node.host)
       const topic = query.target.toString('hex')
-  
+
       if (query.type === DHT.QUERY) {
-        const remote = Array.from(
-          limit(
-            128,
-            filter(
-              record => record.hash !== remoteRecord,
-              peers.get(topic)
-            )
-          )
-        )
-        // this.emit('lookup', query.target, remoteRecord)
-  
-        return cb(null, {
-          peers: remote.length ? Buffer.concat(remote) : null,
-          localPeers: null
-          // TODO: implement local peers, this is going to be a pain, since the
-          //       local network can change.
-        })
+        const res = collectPeers(topic, remoteRecord.asString, peers, keyByAddress)
+        return cb(null, res)
       }
 
-      if (value.unannounce) {
-        peers.delete(topic, remoteRecord, remoteRecord.hash)
-      } else {
-        peers.add(topic, remoteRecord, remoteRecord.hash)
+      if (query.type === DHT.UPDATE) {
+        if (value.unannounce) {
+          peers.delete(topic, remoteRecord, remoteRecord.asString, remoteRecord)
+        } else {
+          peers.add(topic, remoteRecord, remoteRecord.asString, remoteRecord)
+        }
+        return cb(null, null)
       }
       cb(null, null)
     }
@@ -159,18 +174,18 @@ function hostForPackage (pkg) {
 }
 
 function decodeLocalPeers (host, buf) {
-  const peers = []
+  const localPeers = []
 
   if (buf.length & 3) return null
 
   for (var i = 0; i < buf.length; i += 4) {
     const port = buf.readUInt16BE(i + 2)
     if (!port) return null
-    peers.push({
+    localPeers.push({
       host: host + buf[i] + '.' + buf[i + 1],
       port
     })
   }
 
-  return peers
+  return localPeers
 }
