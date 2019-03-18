@@ -8,6 +8,8 @@ tape('basic', t => {
   t.equals(peer.port, 8080)
   t.equals(peer.host, '127.0.0.1')
   const copy = Buffer.concat([peer])
+  t.equals(Buffer.isBuffer(peer), true)
+  t.equals(Buffer.byteLength(peer), 6)
   t.deepEquals(ipv4Peers.decode(copy), [{
     port: 8080,
     host: '127.0.0.1'
