@@ -12,7 +12,7 @@ function noop () {}
 
 module.exports = {
   validate: (config) => true,
-  create ({ bootstrap, port, addr }, emitter, peers, keyByAddress) {
+  create ({ bootstrap, port, addr }, emitter, peers) {
     let rpc
     return {
       open,
@@ -137,7 +137,7 @@ module.exports = {
       const topic = query.target.toString('hex')
 
       if (query.type === DHT.QUERY) {
-        const res = collectPeers(topic, remoteRecord.asString, peers, keyByAddress)
+        const res = collectPeers(topic, remoteRecord.asString, peers)
         return cb(null, res)
       }
 
