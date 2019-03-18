@@ -10,8 +10,13 @@
     "type": "git",
     "url": "git+https://github.com/martinheidegger/p2p-networks.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "dat",
+    "p2p",
+    "network",
+    "configurable"
+  ],
+  "author": "Martin Heidegger <martin.heidegger@gmail.com>",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/martinheidegger/p2p-networks/issues"
