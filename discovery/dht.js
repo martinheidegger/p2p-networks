@@ -46,7 +46,7 @@ module.exports = {
                 cause: err
               }))
             }
-            cb()
+            cb(null)
           }
         )
       },
@@ -86,7 +86,7 @@ module.exports = {
               cause: err
             }))
           }
-          cb()
+          cb(null)
         }
       )
     }
