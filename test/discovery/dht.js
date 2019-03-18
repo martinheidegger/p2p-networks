@@ -2,22 +2,20 @@
 const test = require('tape-x')()
 const dht = require('../../discovery/dht.js')
 const EventedMapOfSets = require('../../lib/EventedMapOfSets.js')
-const Evented2DMatrix = require('../../lib/Evented2DMatrix.js')
-const EventedSet = require('../../lib/EventedSet.js')
 const EventEmitter = require('events').EventEmitter
 const crypto = require('crypto')
-const DHT = require('dht-rpc')
 const ipv4Peers = require('ipv4-peers')
 
 const noop = () => {}
 const bootstrap = []
-const node = DHT({
-  ephemeral: true
+const node = create({
+  bootstrap: [],
+  port: 3333
 })
 test('before', t => {
-  node.listen(0, () => {
-    const addr = node.address()
-    bootstrap.push(addr.address + ':' + addr.port)
+  node.service.open()
+  node.event.on('listening', () => {
+    bootstrap.push(`127.0.0.1:3333`)
     t.end()
   })
 })
@@ -28,13 +26,12 @@ function create (opts) {
   }
   const event = new EventEmitter()
   const peers = new EventedMapOfSets()
-  const keyByAddress = new Evented2DMatrix(new EventedSet(), new EventedSet())
   const service = dht.create({
     bootstrap,
     port: 0,
     // addr: 'localhost',
     ...opts
-  }, event, peers, keyByAddress)
+  }, event, peers)
   return { service, event, peers }
 }
 
@@ -53,19 +50,18 @@ test('starting and closing', t => {
 })
 
 test('connecting to localhost', t => {
-  const a = create()
+  const a = create({ name: 'a', port: 1234 })
   a.event.on('listening', function () {
     const topic = crypto.randomBytes(32).toString('hex')
-    a.service.announce(topic, {
-      port: '8080',
+    const server = {
+      port: 8080,
       localAddress: { port: '8080', host: '127.0.0.1' }
-    }, () => {
+    }
+    a.service.announce(topic, server, () =>
       b.service.lookup(topic, noop)
-    })
-    const b = create()
-    b.event.on('warning', function (warn) {
-      console.log(warn)
-    })
+    )
+    const b = create('b')
+    b.event.on('warning', warn => t.fail('Warning: ' + warn))
     b.peers.on('add', (key, peer) => {
       t.equals(key, topic)
       t.deepEquals(ipv4Peers.decode(peer), [{
@@ -80,26 +76,25 @@ test('connecting to localhost', t => {
     })
     b.service.open()
   })
-  a.event.on('warning', function (warn) {
-    console.log(warn)
-  })
+  a.event.on('warning', warn => t.fail(warn))
   a.service.open()
 })
 
 test('testing interval lookup', t => {
-  t.plan(4)
+  t.plan(5)
   const topic = crypto.randomBytes(32).toString('hex')
   const a = create({
     name: 'a',
     port: 3456
   })
-  const peerKnownByA = ipv4Peers.encode([{ port: 1234, host: '192.168.1.0' }])
-  a.peers.add(topic, peerKnownByA, peerKnownByA.asString)
   a.event.on('listening', function () {
-    a.service.announce(topic, {
-      port: '1234',
-      localAddress: { port: '1234', host: '127.0.0.1' }
-    }, () => {
+    t.pass('listening event broadcast')
+    const address = {
+      port: 1234,
+      // localAddress: { port: '1234', host: '127.0.0.1' }
+    }
+    a.service.announce(topic, address, () => {
+      t.pass('announce done, looking up topic')
       b.service.lookup(topic, noop)
     })
     const b = create({
@@ -108,16 +103,15 @@ test('testing interval lookup', t => {
     })
     setImmediate(() => {
       b.event.on('warning', function (warn) {
-        console.log('↓ WARN2 ↓')
-        console.log(warn)
+        t.fail(`Unexpected warning: ${warn}`)
       })
-      b.peers.on('add', (key, peer, hash) => {
+      b.peers.once('add', (key, peer, hash) => {
         t.equals(key, topic, 'we should have found the peer for the topic!')
         t.deepEquals(ipv4Peers.decode(peer), [{
-          host: '192.168.1.0',
+          host: '127.0.0.1',
           port: 1234
         }], 'the peer matches our expectations')
-        t.equals(hash, 'wKgBAATS', 'the peers hash also matches our expectations')
+        t.equals(hash, 'fwAAAQTS', 'the peers hash also matches our expectations')
         setImmediate(async () => {
           await a.service.close()
           await b.service.close()
@@ -128,12 +122,15 @@ test('testing interval lookup', t => {
     })
   })
   a.event.on('warning', function (warn) {
+    t.equals(warn.code, 'EDHTQUERY')
     t.pass('warning received because b wasnt started yet')
   })
   a.service.open()
 })
 
 test('after', t => {
-  node.destroy()
-  t.end()
+  node.service.close()
+  node.event.on('close', () => {
+    t.end()
+  })
 })

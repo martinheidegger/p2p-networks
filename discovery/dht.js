@@ -15,7 +15,23 @@ module.exports = {
   create ({ bootstrap, port, addr }, emitter, peers) {
     let rpc
     return {
-      open,
+      open () {
+        rpc = new DHT({
+          bootstrap: bootstrap,
+          ephemeral: false
+        })
+        rpc.on('close', onUnexpectedClose)
+        rpc.on('error', onUnexpectedClose)
+        rpc.on('warning', emitter.emit.bind(emitter, 'warning'))
+        rpc.on('listening', emitter.emit.bind(emitter, 'listening'))
+        rpc.command('peers', {
+          inputEncoding: PeersInput,
+          outputEncoding: PeersOutput,
+          update: peersQueryHandler,
+          query: peersQueryHandler
+        })
+        rpc.listen(port, addr)
+      },
       lookup (key, cb) {
         const keyBuffer = Buffer.from(key, 'hex')
         handleStream(
@@ -53,24 +69,6 @@ module.exports = {
         rpc.destroy()
         rpc = null
       }
-    }
-
-    function open () {
-      rpc = new DHT({
-        bootstrap: bootstrap,
-        ephemeral: false
-      })
-      rpc.on('close', onUnexpectedClose)
-      rpc.on('error', onUnexpectedClose)
-      rpc.on('warning', emitter.emit.bind(emitter, 'warning'))
-      rpc.on('listening', emitter.emit.bind(emitter, 'listening'))
-      rpc.command('peers', {
-        inputEncoding: PeersInput,
-        outputEncoding: PeersOutput,
-        update: peersQueryHandler,
-        query: peersQueryHandler
-      })
-      rpc.listen(port, addr)
     }
 
     function queryAndUpdate (key, packet, cb) {
@@ -143,9 +141,9 @@ module.exports = {
 
       if (query.type === DHT.UPDATE) {
         if (value.unannounce) {
-          peers.delete(topic, remoteRecord, remoteRecord.asString, remoteRecord)
+          peers.delete(topic, remoteRecord, remoteRecord.asString)
         } else {
-          peers.add(topic, remoteRecord, remoteRecord.asString, remoteRecord)
+          peers.add(topic, remoteRecord, remoteRecord.asString)
         }
         return cb(null, null)
       }
