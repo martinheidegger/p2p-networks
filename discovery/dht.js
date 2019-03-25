@@ -32,29 +32,30 @@ module.exports = {
         })
         rpc.listen(port, addr)
       },
-      lookup (key, cb) {
+      toggleSearch (key, isSearching, cb) {
         const keyBuffer = Buffer.from(key, 'hex')
-        handleStream(
-          key,
-          null,
-          rpc.query('peers', keyBuffer, {}),
-          err => {
-            if (err) {
-              emitter.emit('warning', Object.assign(new Error('Error during query'), {
-                code: 'EDHTLOOKUP',
-                key,
-                cause: err
-              }))
+        if (isSearching) {
+          handleStream(
+            key,
+            null,
+            rpc.query('peers', keyBuffer, {}),
+            err => {
+              if (err) {
+                emitter.emit('warning', Object.assign(new Error('Error during query'), {
+                  code: 'EDHTLOOKUP',
+                  key,
+                  cause: err
+                }))
+              }
+              cb(null)
             }
-            cb(null)
-          }
-        )
+          )
+        } else {
+          // TODO: !
+        }
       },
-      announce (key, address, cb) {
-        queryAndUpdate(key, addressToPacket(address, ANNOUNCE_FLAG), cb)
-      },
-      unannounce (key, address, cb) {
-        queryAndUpdate(key, addressToPacket(address, UNANNOUNCE_FLAG), cb)
+      toggleAnnounce (key, address, isAnnouncing, cb) {
+        update(key, addressToPacket(address, isAnnouncing ? ANNOUNCE_FLAG : UNANNOUNCE_FLAG), cb)
       },
       close () {
         rpc.removeAllListeners()
@@ -71,12 +72,12 @@ module.exports = {
       }
     }
 
-    function queryAndUpdate (key, packet, cb) {
+    function update (key, packet, cb) {
       const host = hostForPackage(packet)
       handleStream(
         key,
         host,
-        rpc.queryAndUpdate('peers', Buffer.from(key, 'hex'), packet),
+        rpc.update('peers', Buffer.from(key, 'hex'), packet),
         err => {
           if (err) {
             emitter.emit('warning', Object.assign(new Error('Error during query'), {

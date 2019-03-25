@@ -1,7 +1,6 @@
 'use strict'
 const EventEmitter = require('events').EventEmitter
 const serviceLookup = require('./lib/serviceLookup.js')
-const rangeInterval = require('./lib/rangeInterval.js')
 const stateMgr = require('./lib/stateMgr.js')
 const hasListener = require('./lib/hasListener.js')
 const toggleListener = require('./lib/toggleListener.js')
@@ -16,6 +15,8 @@ const State = Object.freeze({
 
 const ACTIVE_STATES = [State.announce, State.lookup, State.inactive]
 
+const noop = () => {}
+
 class Discovery extends EventEmitter {
   static State = State
 
@@ -26,8 +27,7 @@ class Discovery extends EventEmitter {
   constructor (services, config, peers, keyByAddress) {
     super()
     this._config = config
-    const { lookupInterval: configLookupInterval, ... serviceConfig } = config
-    const lookupRange = rangeInterval.parse(configLookupInterval)
+    const { ... serviceConfig } = config
     this.closed = new Promise(resolve => this.once('close', resolve))
     const service = serviceLookup(services, serviceConfig).create(this, peers)
     let logActive = false
@@ -46,37 +46,31 @@ class Discovery extends EventEmitter {
       }
       state.set(State.announce)
     }
-    const lookup = () => {
-      if (logActive) this.emit('log', { type: 'lookup' })
-      for (const key of keyByAddress.keys) {
-        service.lookup(key)
-      }
-    }
     const isActive = stateMgr(isActive => {
-      toggleListener(keyByAddress, 'add', checkState, isActive)
-      toggleListener(keyByAddress, 'remove', checkState, isActive)
+      toggleListener(keyByAddress, 'change', checkState, isActive)
     }, false)
-    const isAnnouncing = stateMgr(isAnnouncing => {
-      toggleListener(keyByAddress, 'add', service.announce, isAnnouncing)
-      toggleListener(keyByAddress, 'remove', service.unannounce, isAnnouncing)
-      if (isAnnouncing) {
-        for (const [key, address] of keyByAddress) {
-          service.announce(key, address)
-        }
+
+    function onKeyAddress (key, address, isAdded) {
+      service.toggleAnnounce(key, address, isAdded, noop)
+    }
+    function onKey (key, isAdded) {
+      service.toggleSearch(key, isAdded, noop)
+    }
+    const isAnnouncing = stateMgr(active => {
+      toggleListener(keyByAddress, 'change', onKeyAddress, active)
+      for (const [key, address] of keyByAddress) {
+        service.toggleAnnounce(key, address, active, noop)
       }
     }, false)
-    let lookupInterval
-    const isLookup = stateMgr(isLookup => {
-      if (isLookup) {
-        lookupInterval = rangeInterval.set(lookup, lookupRange)
-        lookup()
-      } else {
-        rangeInterval.clear(lookupInterval)
+    const isLookup = stateMgr(active => {
+      toggleListener(keyByAddress, 'key', onKey, active)
+      for (const key of keyByAddress.keys) {
+        service.toggleSearch(key, active, noop)
       }
     }, false)
     const state = stateMgr(state => {
       if (logActive) this.emit('log', { type: 'state-change', state })
-      isLookup.set(state === State.lookup)
+      isLookup.set(state === State.lookup || state === State.announce)
       isAnnouncing.set(state === State.announce)
       isActive.set(ACTIVE_STATES.includes(state))
       if (state === State.closed) {

@@ -61,15 +61,13 @@ module.exports = ({name, setup, instantiate, tearDown, errorPrefix}) => {
     a.event.on('listening', function () {
       const topic = crypto.randomBytes(32).toString('hex')
       const server = {
-        port: 8080,
-        localAddress: { port: '8080', host: '127.0.0.1' }
+        port: 8080
       }
-      a.service.announce(topic, server, () =>
-        b.service.lookup(topic, noop)
-      )
       const b = create({ name: 'b', port: 1235 })
       b.event.on('warning', warn => t.fail('Warning: ' + warn))
-      b.peers.on('add', (key, peer) => {
+      b.peers.on('change', (key, peer, hash, isAdd) => {
+        t.ok(isAdd)
+        t.equals(hash, 'fwAAAR+Q')
         t.equals(key, topic, 'topic matches expectation')
         t.deepEquals(ipv4Peers.decode(peer), [{
           host: '127.0.0.1',
@@ -82,13 +80,21 @@ module.exports = ({name, setup, instantiate, tearDown, errorPrefix}) => {
         })
       })
       b.service.open()
+      a.service.toggleAnnounce(topic, server, true, () => {
+        // console.log('a announce done')
+      })
+      a.service.toggleSearch(topic, true, () => {
+        b.service.toggleSearch(topic, true, () => {
+          // console.log('b lookup done')
+        })
+      })
     })
     a.event.on('warning', warn => t.fail(warn))
     a.service.open()
   })
 
   test(`${name} > Testing distance lookup`, async t => {
-    t.plan(6)
+    t.plan(5)
     const topic = crypto.randomBytes(32).toString('hex')
     const a = create({
       name: 'a',
@@ -111,11 +117,11 @@ module.exports = ({name, setup, instantiate, tearDown, errorPrefix}) => {
       }),
       new Promise(resolve => {
         a.service.open()
-        a.service.announce(topic, {
+        a.service.toggleAnnounce(topic, {
           port: 1234,
           // localAddress: { port: 1234, host: '127.0.0.1' }
-        }, err => {
-          t.equals(err, null, 'no error in announce')
+        }, true, err => {
+          // t.equals(err, null, 'no error in announce')
           resolve()
         })
         a.event.on('warning', function (warn) {
@@ -129,7 +135,7 @@ module.exports = ({name, setup, instantiate, tearDown, errorPrefix}) => {
 
     await Promise.all([
       new Promise(resolve => {
-        b.peers.on('add', (key, peer, hash) => {
+        b.peers.on('change', (key, peer, hash, isAdd) => {
           t.equals(key, topic, 'we should have found the peer for the topic!')
           t.deepEquals(ipv4Peers.decode(peer), [{
             host: '127.0.0.1',
@@ -140,7 +146,7 @@ module.exports = ({name, setup, instantiate, tearDown, errorPrefix}) => {
         })
       }),
       new Promise(resolve => {
-        b.service.lookup(topic, () => {
+        b.service.toggleSearch(topic, true, () => {
           t.pass('lookup done')
           resolve()
         })

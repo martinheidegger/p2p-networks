@@ -36,7 +36,11 @@ module.exports = {
           address
         })
       },
-      lookup (key, cb) {
+      toggleSearch (key, isSearching, cb) {
+        if (!isSearching) {
+          // TODO: !
+          return cb()
+        }
         lock(unlock =>
           dht.lookup(key, err => {
             if (err) {
@@ -49,39 +53,38 @@ module.exports = {
           })
         , cb)
       },
-      announce (key, address, cb) {
+      toggleAnnounce (key, address, isAnnouncing, cb) {
         lock(unlock => {
           if (typeof address.port !== 'number') {
-            throw new Error('Cant announce!')
+            return unlock(new Error('Cant announce!'))
           }
-          dht.announce(key, address.port, err => {
-            if (err) {
-              emitter.emit('warning', Object.assign(new Error('Announcing didnt work'), {
-                code: 'EDHTLEGACYANNOUNCE',
-                key,
-                address,
-                cause: err
-              }))
-            }
-            unlock()
-          })
+          // TODO: announce only hosts that are non-local?
+          if (isAnnouncing) {
+            dht.announce(key, address.port, err => {
+              if (err) {
+                emitter.emit('warning', Object.assign(new Error('Announcing didnt work'), {
+                  code: 'EDHTLEGACYANNOUNCE',
+                  key,
+                  address,
+                  cause: err
+                }))
+              }
+              unlock()
+            })
+          } else {
+            dht.unannounce(key, address.port, err => {
+              if (err) {
+                emitter.emit('warning', Object.assign(new Error('Unannouncing didnt work'), {
+                  code: 'EDHTLEGACYUNANNOUNCE',
+                  key,
+                  address,
+                  cause: err
+                }))
+              }
+              unlock()
+            })
+          }
         }, cb)
-      },
-      unannounce (key, address, cb) {
-        lock(unlock =>
-          // TODO: announce only hosts that are non-local
-          dht.unannounce(key, address.port, err => {
-            if (err) {
-              emitter.emit('warning', Object.assign(new Error('Unannouncing didnt work'), {
-                code: 'EDHTLEGACYUNANNOUNCE',
-                key,
-                address,
-                cause: err
-              }))
-            }
-            unlock()
-          })
-        , cb)
       },
       close () {
         lock.sync(() => {
