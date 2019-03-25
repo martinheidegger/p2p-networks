@@ -4,8 +4,9 @@ const tape = require('tape-x')()
 
 tape('adding sends event', t => {
   const set = new EventedSet()
-  set.on('add', entry => {
+  set.on('change', (entry, isAdd) => {
     t.equals(entry, 'x')
+    t.equals(isAdd, true)
     t.end()
   })
   set.add('x')
@@ -14,7 +15,7 @@ tape('adding sends event', t => {
 tape('adding again doesnt send event', t => {
   const set = new EventedSet()
   let called = 0
-  set.on('add', () => called += 1)
+  set.on('change', () => called += 1)
   set.add('x')
   t.equals(called, 1)
   set.add('x')
@@ -25,7 +26,7 @@ tape('adding again doesnt send event', t => {
 tape('adding again doesnt send event', t => {
   const set = new EventedSet()
   let called = 0
-  set.on('add', () => called += 1)
+  set.on('change', () => called += 1)
   set.add('x')
   t.equals(called, 1)
   set.add('x')
@@ -36,8 +37,7 @@ tape('adding again doesnt send event', t => {
 tape('adding and deleting sends both events', t => {
   const set = new EventedSet()
   const stack = []
-  set.on('add', () => stack.push('add'))
-  set.on('delete', () => stack.push('delete'))
+  set.on('change', (_, isAdd) => stack.push(isAdd ? 'add' : 'delete'))
   set.add('x')
   set.delete('x')
   t.deepEquals(stack, ['add', 'delete'])
@@ -47,8 +47,7 @@ tape('adding and deleting sends both events', t => {
 tape('deleting a nonexistant item shouldnt trigger anything', t => {
   const set = new EventedSet()
   const stack = []
-  set.on('add', () => stack.push('add'))
-  set.on('delete', () => stack.push('delete'))
+  set.on('change', (_, isAdd) => stack.push(isAdd ? 'add' : 'delete'))
   set.delete('x')
   set.add('x')
   set.delete('x')

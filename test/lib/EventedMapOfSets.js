@@ -57,12 +57,7 @@ tape('basics: clear', async t => {
 tape('events', async t => {
   const set = new EventedMapOfSets()
   const stack = []
-  set.on('add', (key, value, valueOrHash) => {
-    stack.push({ add: { key, value, valueOrHash }})
-  })
-  set.on('delete', (key, value, valueOrHash) => {
-    stack.push({ del: { key, value, valueOrHash }})
-  })
+  set.on('change', (key, value, valueOrHash, isAdd) => stack.push({ key, value, valueOrHash, isAdd }))
   await Promise.all([
     set.add('x', 'r', 'y'),
     set.add('x', 'y'),
@@ -74,14 +69,14 @@ tape('events', async t => {
     set.clear()
   ])
   t.deepEquals(stack, [
-    { add: { key: 'x', value: 'r', valueOrHash: 'y' } },
-    { add: { key: 'x', value: 'z', valueOrHash: 'z' } },
-    { del: { key: 'x', value: 'r', valueOrHash: 'y' } },
-    { del: { key: 'x', value: 'z', valueOrHash: 'z' } },
-    { add: { key: 'a', value: 'b', valueOrHash: 'b' } },
-    { add: { key: 'x', value: 'y', valueOrHash: 'y' } },
-    { del: { key: 'a', value: 'b', valueOrHash: 'b' } },
-    { del: { key: 'x', value: 'y', valueOrHash: 'y' } }
+    { isAdd: true, key: 'x', value: 'r', valueOrHash: 'y' },
+    { isAdd: true, key: 'x', value: 'z', valueOrHash: 'z' },
+    { isAdd: false, key: 'x', value: 'r', valueOrHash: 'y' },
+    { isAdd: false, key: 'x', value: 'z', valueOrHash: 'z' },
+    { isAdd: true, key: 'a', value: 'b', valueOrHash: 'b' },
+    { isAdd: true, key: 'x', value: 'y', valueOrHash: 'y' },
+    { isAdd: false, key: 'a', value: 'b', valueOrHash: 'b' },
+    { isAdd: false, key: 'x', value: 'y', valueOrHash: 'y' }
   ])
 })
 

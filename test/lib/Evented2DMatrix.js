@@ -40,8 +40,7 @@ tape('events', async t => {
   const values = new EventedSet()
   const mtx = new Evented2DMatrix(keys, values)
   const stack = []
-  mtx.on('add', (key, value) => stack.push({ add: { key, value } }))
-  mtx.on('delete', (key, value) => stack.push({ delete: { key, value } }))
+  mtx.on('change', (key, value, isAdd) => stack.push({ key, value, isAdd }))
   keys.add('x')
   values.add('a')
   keys.add('y')
@@ -50,9 +49,12 @@ tape('events', async t => {
   keys.delete('x')
   await immediate()
   t.deepEquals(stack, [
-    { add: { key: 'x', value: 'a' } },
-    { add: { key: 'y', value: 'a' } },
-    { add: { key: 'x', value: 'b' } },
-    { add: { key: 'y', value: 'b' } },
+    { isAdd: true, key: 'x', value: 'a' },
+    { isAdd: true, key: 'y', value: 'a' },
+    { isAdd: true, key: 'x', value: 'b' },
+    { isAdd: true, key: 'y', value: 'b' },
+    { isAdd: false, key: 'x', value: 'a' },
+    { isAdd: false, key: 'y', value: 'a' },
+    { isAdd: false, key: 'x', value: 'b' },
   ])
 })
