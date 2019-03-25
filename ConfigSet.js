@@ -80,7 +80,7 @@ class ConfigSet extends EventEmitter {
         return cb(null, false)
       }
       this._instances.set(hash, { instance, config })
-      this.emit('add', instance, config, hash)
+      this.emit('change', instance, config, hash, true)
       cb(null, true)
     })
   }
@@ -95,7 +95,7 @@ class ConfigSet extends EventEmitter {
         this.emit('warning', Object.assign(new Error('Error while closing instance.'), { config: entry.config, hash, cause: err, source: this }))
       }
       this._instances.delete(hash)
-      this.emit('delete', entry.instance, entry.config, hash)
+      this.emit('change', entry.instance, entry.config, hash, false)
       cb(null, true)
     })
   }

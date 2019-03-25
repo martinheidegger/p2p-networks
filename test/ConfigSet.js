@@ -126,8 +126,10 @@ tape('error propagation while deleting', async t => {
       })
     ),
     new Promise(end =>
-      set.once('delete', () => {
-        end()
+      set.on('change', (instance, config, hash, isAdd) => {
+        if (!isAdd) {
+          end()
+        }
       })
     )
   ])
@@ -146,12 +148,12 @@ tape('add and delete events for config to happen', t => {
     cb(null, expectedInstance)
   })
   set.add(expectedConfig)
-  set.once('add', (instance, config, hash) => {
+  set.once('change', (instance, config, hash) => {
     t.equals(instance, expectedInstance)
     t.equals(config, expectedConfig)
     t.equals(hash, configHash(expectedConfig))
     set.delete(expectedConfig)
-    set.once('delete', (instance, config, hash) => {
+    set.once('change', (instance, config, hash) => {
       t.equals(instance, expectedInstance)
       t.equals(config, expectedConfig)
       t.equals(hash, configHash(expectedConfig))
