@@ -1,6 +1,6 @@
 'use strict'
 const createDht = require('bittorrent-dht')
-const createPeer = require('../lib/createPeer.js')
+const Peer = require('../lib/Peer.js')
 const noop = () => {}
 const { createLockCb } = require('flexlock-cb')
 
@@ -30,7 +30,7 @@ module.exports = {
         dht.on('warn', emitter.emit.bind(emitter, 'warning'))
         lock = createLockCb()
         lock(unlock => dht.on('ready', unlock), noop)
-        dht.on('listening', () => lock.sync(() => emitter.emit('listening')))
+        dht.on('listening', () => lock.sync(() => emitter.emit('listening', )))
         dht.listen({
           port,
           address
@@ -55,8 +55,8 @@ module.exports = {
       },
       toggleAnnounce (key, address, isAnnouncing, cb) {
         lock(unlock => {
-          if (typeof address.port !== 'number') {
-            return unlock(new Error('Cant announce!'))
+          if (address.type !== 'IPv4' || address.mode !== Peer.MODE.tcpOrUdp) {
+            return unlock(new Error('Only IPv4 and tcpOrUdp supported'))
           }
           // TODO: announce only hosts that are non-local?
           if (isAnnouncing) {
@@ -107,7 +107,10 @@ module.exports = {
     }
 
     function onPeer (rawPeer, infoHash, via) {
-      const peer = createPeer(rawPeer.port, rawPeer.host)
+      const peer = Peer.create(rawPeer.port, rawPeer.host, {
+        type: 'IPv4',
+        mode: Peer.MODE.tcpOrUdp
+      })
       peers.add(infoHash.toString('hex'), peer, peer.asString)
     }
 

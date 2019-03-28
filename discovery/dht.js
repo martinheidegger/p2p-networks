@@ -1,8 +1,7 @@
 'use strict'
 const { DHT } = require('dht-rpc')
 const { PeersInput, PeersOutput } = require('@hyperswarm/dht/messages.js')
-const ipv4Peers = require('ipv4-peers')
-const createPeer = require('../lib/createPeer.js')
+const Peer = require('../lib/Peer.js')
 const collectPeers = require('../lib/collectPeers.js')
 
 const ANNOUNCE_FLAG = Symbol('announce')
@@ -14,10 +13,11 @@ module.exports = {
   validate: (config) => true,
   create ({ bootstrap, port, addr }, emitter, peers) {
     let rpc
+    let holepunch = noop
     return {
       open () {
         rpc = new DHT({
-          bootstrap: bootstrap,
+          bootstrap,
           ephemeral: false
         })
         rpc.on('close', onUnexpectedClose)
@@ -31,6 +31,7 @@ module.exports = {
           query: peersQueryHandler
         })
         rpc.listen(port, addr)
+        holepunch = (peer, cb) => rpc.holepunch(peer, cb)
       },
       toggleSearch (key, isSearching, cb) {
         const keyBuffer = Buffer.from(key, 'hex')
@@ -55,6 +56,9 @@ module.exports = {
         }
       },
       toggleAnnounce (key, address, isAnnouncing, cb) {
+        if (address.type !== 'IPv4' || address.mode !== Peer.MODE.tcpOrUdp) {
+          return cb(new Error('Only IPv4 and tcpOrUdp supported'))
+        }
         update(key, addressToPacket(address, isAnnouncing ? ANNOUNCE_FLAG : UNANNOUNCE_FLAG), cb)
       },
       close () {
@@ -69,6 +73,7 @@ module.exports = {
         rpc.on('close', () => emitter.emit('close'))
         rpc.destroy()
         rpc = null
+        holepunch = noop
       }
     }
 
@@ -98,9 +103,11 @@ module.exports = {
           const v = data.value
           if (!v || (!v.peers && !v.localPeers)) return
           if (v.peers) {
-            const simplePeers = ipv4Peers.decode(v.peers)
-            for (const simplePeer of simplePeers) {
-              const peer = createPeer(simplePeer.port, simplePeer.host)
+            const foundPeers = Peer.decodeAll(v.peers, {
+              referrer: data.node,
+              holepunch
+            })
+            for (const peer of foundPeers) {
               if (v.unannounce) {
                 peers.delete(key, peer, peer.asString)
               } else {
@@ -132,7 +139,7 @@ module.exports = {
       const port = value.port || query.node.port
       if (!(port > 0 && port < 65536)) return cb(new Error('Invalid port'))
 
-      const remoteRecord = createPeer(port, query.node.host)
+      const remoteRecord = Peer.create(port, query.node.host)
       const topic = query.target.toString('hex')
 
       if (query.type === DHT.QUERY) {
@@ -156,7 +163,7 @@ module.exports = {
 function addressToPacket (address, announce) {
   const packet = {
     port: address.port,
-    localAddress: address.localAddress && ipv4Peers.encode([address.localAddress])
+    localAddress: null, // address.localAddress && ipv4Peers.encode([address.localAddress])
   }
   if (announce === UNANNOUNCE_FLAG) {
     packet.unannounce = true

@@ -2,14 +2,11 @@
 const createMDNS = require('multicast-dns')
 const crypto = require('crypto')
 const filter = require('../lib/iter/filter.js')
-const map = require('../lib/iter/map.js')
-const combine = require('../lib/iter/combine.js')
 const toArray = require('../lib/iter/toArray.js')
 const tuples = require('../lib/iter/tuples.js')
 const iterate = require('../lib/iter/iterate.js')
-const createPeer = require('../lib/createPeer.js')
+const Peer = require('../lib/Peer.js')
 const rangeInterval = require('../lib/rangeInterval.js')
-const toggleListener = require('../lib/toggleListener.js')
 const nw = require('../lib/Networks.js')()
 
 const noop = () => {}
@@ -23,10 +20,16 @@ function _getId (res, name) {
   return null
 }
 
+function * valuesOfValues (struct) {
+  for (const value of struct.values()) {
+    yield value.values()
+  }
+}
+
 
 module.exports = {
   validate: (config) => true,
-  create ({ domain, port, keySize, name, refreshInterval: rawInterval }, emitter, peers, keyByAddress) {
+  create ({ domain, port, keySize, name, refreshInterval: rawInterval }, emitter, peers) {
     const tld = '.' + domain
     let mDNS = null
     const answersByName = new Map()
@@ -47,6 +50,12 @@ module.exports = {
           }))
         })
         mDNS.on('ready', () => emitter.emit('listening'))
+
+        // TODO: Consider sending out the peers also as answer
+        /*
+        peers.on('change', (key, value, valueOrHash, add) => {
+        })
+        */
       },
 
       toggleSearch (key, doSearch, cb) {
@@ -69,26 +78,28 @@ module.exports = {
         cb()
       },
       toggleAnnounce (key, address, doAnnounce, cb) {
+        if (address.type !== 'IPv4' || address.mode !== Peer.MODE.tcpOrUdp) {
+          return cb(new Error('Only IPv4 and tcpOrUdp supported'))
+        }
         const name = nameForKey(key)
+        const addressId = address.port
         
-        let answers = answersByName.get(name)
+        let answerMap = answersByName.get(name)
         if (doAnnounce) {
-          if (answers === undefined) {
-            answers = new Map()
-            answersByName.set(name, answers)
-          } else if (answers.has(address.port)) {
+          if (answerMap === undefined) {
+            answerMap = new Map()
+            answersByName.set(name, answerMap)
+          } else if (answerMap.has(addressId)) {
             return cb()
           }
-          answers.set(address.port, [
-            { type: 'SRV', name, data: { target: '0.0.0.0', port: address.port } },
-            { type: 'TXT', name, data: [ Buffer.concat([Buffer.from('id='), crypto.randomBytes(32)]) ] }
-          ])
+          const answerSet = createAnswers(address, name)
+          answerMap.set(addressId, answerSet)
         } else {
-          if (answers === undefined) {
+          if (answerMap === undefined) {
             return cb()
           }
-          answers.delete(address.port)
-          if (answers.size === 0) {
+          answerMap.delete(addressId)
+          if (answerMap.size === 0) {
             answersByName.delete(name)
             delete keyByName[name]
           }
@@ -124,6 +135,20 @@ module.exports = {
       rangeInterval.clear(lookupInterval)
       emitter.on('error', noop)
       emitter.emit('close')
+    }
+
+    function createAnswers (address, name) {
+      if (address.type === 'IPv4') {
+        return createIPv4Answers(address, name)
+      }
+      return []
+    }
+
+    function createIPv4Answers (address, name) {
+      return [
+        { type: 'SRV', name, data: { target: '0.0.0.0', port: address.port } },
+        { type: 'TXT', name, data: [ Buffer.concat([Buffer.from('id='), crypto.randomBytes(32)]) ] }
+      ]
     }
 
     function onUnexpectedClose (err) {
@@ -165,8 +190,8 @@ module.exports = {
             answer.data.target === '0.0.0.0' ? rinfo.address : answer.data.target
           )
           const key = keyByName[answer.name]
-          const remoteRecord = createPeer( port, host )
-          peers.add(key, remoteRecord, remoteRecord.asString)
+          const peer = Peer.create(port, host)
+          peers.add(key, peer, peer.asString)
         }
       ))
     }
@@ -175,31 +200,32 @@ module.exports = {
       return keyByName === undefined
     }
 
-    function onQuery (res, rinfo) {
-      const answers = toArray(
-        combine( // each query contains a set of answers, flat them
-          combine( // each answer is an array of answers, flat them
-            map(
-              q => {
-                const answers = answersByName.get(q.name).values()
-                const id = _getId(res, q.name)
-                if (id) {
-                  return filter(announcement => announcement.id.equals(id), answers)
-                }
-                return answers
-              },
-              filter(q =>
-                q.type === 'SRV' &&
-                answersByName.has(q.name)
-              , res.questions)
-            )
-          )
-        )
+    function onQuery (res) {
+      const relevantQuestions = filter(
+        question => question.type === 'SRV' && answersByName.has(question.name),
+        res.questions
       )
+  
+      const answers = toArray(answersForQuestions(res, relevantQuestions))
       if (answers !== undefined) {
         mDNS.respond({
           answers
         })
+      }
+    }
+
+    function * answersForQuestions (res, questions) {
+      for (const question of questions) {
+        const answerSets = answersByName.get(question.name).values()
+        const id = _getId(res, question.name)
+        for (const answerSet of answerSets) {
+          for (const answer of answerSet) {
+            if (id && answer.id.equals(id)) {
+              continue
+            }
+            yield answer
+          }
+        }
       }
     }
 
@@ -227,16 +253,24 @@ module.exports = {
     }
   
     function lookupAll (cb) {
-      const query = {
-        questions: map(
-          key => ({
-            type: 'SRV',
-            name: nameForKey[key]
-          }),
-          searching.entries()
-        )
+      const questions = toArray(allQuestions())
+      if (questions !== undefined) {
+        mDNS.query({
+          questions
+        }, null, null, cb)
       }
-      mDNS.query(query, null, null, cb)
+    }
+
+    function * allQuestions () {
+      for (const answerMap of answersByName.values()) {
+        for (const answersSets of answerMap.values()) {
+          for (const answerSet of answersSets) {
+            for (const answer of answerSet) {
+              yield answer
+            }
+          }
+        }
+      }
     }
   }
 }
